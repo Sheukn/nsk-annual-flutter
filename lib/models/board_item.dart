@@ -7,6 +7,8 @@ class BoardItem {
   Size size;
   double rotation;
   bool isImage;
+  List<dynamic>? drawingActions;
+  Color? drawingBackground;
 
   BoardItem({
     required this.id,
@@ -15,6 +17,8 @@ class BoardItem {
     required this.size,
     this.rotation = 0.0,
     this.isImage = false,
+    this.drawingActions,
+    this.drawingBackground,
   });
 }
 
