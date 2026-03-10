@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_pa_snk/models/board_item.dart';
 
@@ -19,8 +20,25 @@ class BoardItemWidget extends StatelessWidget {
     required this.onScaleUpdate,
   });
 
+  
+
   @override
   Widget build(BuildContext context) {
+    Widget content;
+
+    if (item.imagePath != null && File(item.imagePath!).existsSync()) {
+      debugPrint("Loading image from path: ${item.imagePath}");
+      content = Image.file(
+        File(item.imagePath!),
+        fit: BoxFit.contain, 
+      );
+    } else {
+      debugPrint("No valid image found at path: ${item.imagePath}, displaying placeholder");
+      debugPrint("Item details - ID: ${item.id}, isImage: ${item.isImage}, imagePath: ${item.imagePath}");
+      content = Center(
+        child: Text(item.id.toString(), style: const TextStyle(color: Colors.white)),
+      );
+    }
     return Positioned(
       left: item.position.x,
       top: item.position.y,
@@ -46,9 +64,7 @@ class BoardItemWidget extends StatelessWidget {
                 ),
               ],
             ),
-            child: Center(
-              child: Text(item.id, style: const TextStyle(color: Colors.white)),
-            ),
+            child: content,
           ),
         ),
       ),

@@ -4,6 +4,7 @@ import 'package:flutter_pa_snk/models/board_item.dart';
 import 'widgets/board_item_widget.dart';
 import 'widgets/control_sliders.dart';
 import 'widgets/board_action_menu.dart';
+import 'package:uuid/uuid.dart';
 
 class BoardView extends StatefulWidget {
   const BoardView({super.key});
@@ -144,12 +145,13 @@ class _BoardViewState extends State<BoardView> {
       item.position.y += details.focalPointDelta.dy;
     });
   }
+  final _uuid = const Uuid();
 
   void _addImage() {
     setState(() {
       _items.add(
         BoardItem(
-          id: 'Image ${_items.length + 1}',
+          id: _uuid.v4(),
           position: Position(x: 400, y: 400),
           size: Size(width: 200, height: 150),
           color: Colors.grey,
@@ -160,16 +162,19 @@ class _BoardViewState extends State<BoardView> {
     });
   }
 
+
   void _addPostIt() {
+    final id = _uuid.v4();
     setState(() {
       _items.add(
         BoardItem(
-          id: 'Post-it ${_items.length + 1}',
+          id: id,
           position: Position(x: 400, y: 400),
           size: Size(width: 150, height: 150),
           color: Colors.yellow,
           rotation: 0,
           isImage: false,
+          imagePath: "postit_$id.png",
         ),
       );
     });
@@ -210,10 +215,20 @@ class _BoardViewState extends State<BoardView> {
     });
   }
 
-  void _editPostIt() {
-    Navigator.push(
+  void _editPostIt() async {
+    final Map<String, dynamic>? result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const PostItEditView()),
+      MaterialPageRoute(
+        builder: (context) => PostItEditView(id: _selectedItem.first.id),
+      ),
     );
+
+    if (result != null && mounted) {
+      setState(() {
+        final item = _selectedItem.first;
+        item.imagePath = result['imagePath'];
+        item.color = result['canvasColor'];
+      });
+    }
   }
 }

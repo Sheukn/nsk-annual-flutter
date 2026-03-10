@@ -3,10 +3,15 @@ import 'models/drawing_action.dart';
 import 'models/drawing_tool.dart';
 import 'painters/drawing_painter.dart';
 import 'widgets/color_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+import 'package:flutter/rendering.dart';
 
 class PostItEditView extends StatefulWidget {
-  const PostItEditView({super.key});
-
+  const PostItEditView({super.key, required this.id});
+  final String id;
   @override
   State<PostItEditView> createState() => _PostItEditViewState();
 }
@@ -48,12 +53,45 @@ class _PostItEditViewState extends State<PostItEditView> {
     }
   }
 
-  void _saveAndReturn() {
-    // Return the post-it data to the board
-    Navigator.of(context).pop({
-      'actions': actions.sublist(0, currentIndex + 1),
-      'canvasColor': canvasColor,
-    });
+  final GlobalKey _globalKey = GlobalKey();
+
+  void _saveAndReturn() async {
+    String filePath = await savePostItAsImage();
+    debugPrint("Image saved at: $filePath");
+    if (mounted) {
+      Navigator.of(context).pop({
+        'imagePath': filePath, 
+        'actions': actions.sublist(0, currentIndex + 1), 
+        'canvasColor': canvasColor,
+      });
+    }
+  }
+
+  Future<String> savePostItAsImage() async {
+  try {
+      RenderRepaintBoundary boundary = 
+          _globalKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      
+      ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+      ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      
+      if (byteData == null) throw Exception("Erreur lors de la capture");
+      
+      Uint8List pngBytes = byteData.buffer.asUint8List();
+
+      return await saveImageToCache(pngBytes);
+    } catch (e) {
+      debugPrint("Erreur sauvegarde image: $e");
+      return "";
+    }
+  }
+
+  Future<String> saveImageToCache(Uint8List bytes) async {
+    final tempDir = await getTemporaryDirectory();
+    final String fileName = "postit_${widget.id}.png";
+    final File file = File('${tempDir.path}/$fileName');
+    await file.writeAsBytes(bytes);
+    return file.path;
   }
 
   @override
@@ -183,16 +221,19 @@ class _PostItEditViewState extends State<PostItEditView> {
                   border: Border.all(color: Colors.grey),
                 ),
                 child: ClipRect(
-                  child: CustomPaint(
-                    painter: DrawingPainter(
-                      actions: actions,
-                      currentStroke: currentStroke,
-                      currentIndex: currentIndex,
-                      currentTool: currentTool,
-                      currentColor: currentColor,
-                      canvasColor: canvasColor,
+                  child: RepaintBoundary(
+                    key: _globalKey,  
+                    child: CustomPaint(
+                      painter: DrawingPainter(
+                        actions: actions,
+                        currentStroke: currentStroke,
+                        currentIndex: currentIndex,
+                        currentTool: currentTool,
+                        currentColor: currentColor,
+                        canvasColor: canvasColor,
+                      ),
+                      size: const Size(500, 500),
                     ),
-                    size: const Size(500, 500),
                   ),
                 ),
               ),

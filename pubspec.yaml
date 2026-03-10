@@ -31,10 +31,12 @@ dependencies:
   flutter:
     sdk: flutter
 
+  uuid: ^4.4.0
   # Gestion des photos locales
   photo_manager: any
   permission_handler: any
   photo_manager_image_provider: ^2.2.0
+  path_provider: ^2.1.5
   # Gestion de l'état (State Management)
   flutter_riverpod: any
 
