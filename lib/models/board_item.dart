@@ -5,13 +5,16 @@ class BoardItem {
   Color color;
   Position position;
   Size size;
-  double rotation = 0.0;
+  double rotation;
+  bool isImage;
 
   BoardItem({
     required this.id,
     required this.color,
     required this.position,
     required this.size,
+    this.rotation = 0.0,
+    this.isImage = false,
   });
 }
 
