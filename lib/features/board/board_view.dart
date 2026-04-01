@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_pa_snk/data/sources/local/database_helper.dart';
 import 'package:flutter_pa_snk/features/postit/postit_edit_view.dart';
 import 'package:flutter_pa_snk/models/board_item.dart';
 import 'widgets/board_item_widget.dart';
@@ -14,15 +15,29 @@ class BoardView extends StatefulWidget {
 }
 
 class _BoardViewState extends State<BoardView> {
+  static const int _boardId = 1;
+  static const double _boardWidth = 1000;
+  static const double _boardHeight = 1000;
+
   final List<BoardItem> _items = [];
   final List<BoardItem> _selectedItem = [];
+  final DatabaseService _databaseService = DatabaseService();
 
   BoardItem? get activeItem =>
       _selectedItem.length == 1 ? _selectedItem.first : null;
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Mon Tableau de Bord")),
+      appBar: AppBar(
+        title: const Text("Mon Tableau de Bord"),
+        actions: [
+          IconButton(
+            tooltip: 'Save board',
+            icon: const Icon(Icons.save),
+            onPressed: _saveBoard,
+          ),
+        ],
+      ),
       body: Stack(
         children: [
           InteractiveViewer(
@@ -40,8 +55,8 @@ class _BoardViewState extends State<BoardView> {
                   },
               child: Container(
                 color: const Color.fromARGB(255, 182, 168, 81),
-                width: 1000,
-                height: 1000,
+                width: _boardWidth,
+                height: _boardHeight,
                 child: Stack(
                   children:
                       _items
@@ -229,6 +244,29 @@ class _BoardViewState extends State<BoardView> {
         item.imagePath = result['imagePath'];
         item.color = result['canvasColor'];
       });
+    }
+  }
+
+  Future<void> _saveBoard() async {
+    try {
+      print('Saving board $_boardId');
+      await _databaseService.saveBoard(
+        boardId: _boardId,
+        name: 'Main Board',
+        height: _boardHeight,
+        width: _boardWidth,
+        items: _items,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Board saved locally')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save board locally: $e')),
+      );
     }
   }
 }
