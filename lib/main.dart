@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_pa_snk/features/board/board_view.dart';
+import 'package:flutter_pa_snk/features/board/board_list_view.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'dart:io';
 import 'features/gallery/gallery_view.dart';
@@ -45,7 +45,7 @@ class _MyHomePageState extends State<MyHomePage> {
   Widget build(BuildContext context) {
     final List<Widget> widgetOptions = <Widget>[
       const GalleryView(),
-      const BoardView(),
+      const BoardListView(),
     ];
 
     return Scaffold(

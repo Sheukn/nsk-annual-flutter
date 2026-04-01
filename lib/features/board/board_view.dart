@@ -1,23 +1,36 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:flutter_pa_snk/data/sources/local/database_helper.dart';
 import 'package:flutter_pa_snk/features/postit/postit_edit_view.dart';
 import 'package:flutter_pa_snk/models/board_item.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'widgets/board_item_widget.dart';
 import 'widgets/control_sliders.dart';
 import 'widgets/board_action_menu.dart';
 import 'package:uuid/uuid.dart';
 
 class BoardView extends StatefulWidget {
-  const BoardView({super.key});
+  final int boardId;
+  final String boardName;
+
+  const BoardView({
+    super.key,
+    required this.boardId,
+    required this.boardName,
+  });
 
   @override
   State<BoardView> createState() => _BoardViewState();
 }
 
 class _BoardViewState extends State<BoardView> {
-  static const int _boardId = 1;
   static const double _boardWidth = 1000;
   static const double _boardHeight = 1000;
+  final GlobalKey _boardRepaintKey = GlobalKey();
 
   final List<BoardItem> _items = [];
   final List<BoardItem> _selectedItem = [];
@@ -25,11 +38,18 @@ class _BoardViewState extends State<BoardView> {
 
   BoardItem? get activeItem =>
       _selectedItem.length == 1 ? _selectedItem.first : null;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBoardItems();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Mon Tableau de Bord"),
+        title: Text(widget.boardName),
         actions: [
           IconButton(
             tooltip: 'Save board',
@@ -53,28 +73,31 @@ class _BoardViewState extends State<BoardView> {
                       _selectedItem.clear();
                     }),
                   },
-              child: Container(
-                color: const Color.fromARGB(255, 182, 168, 81),
-                width: _boardWidth,
-                height: _boardHeight,
-                child: Stack(
-                  children:
-                      _items
-                          .map(
-                            (item) => BoardItemWidget(
-                              item: item,
-                              isSelected: _selectedItem.contains(item),
-                              onTap: () => _handleItemTap(item),
-                              onLongPress: () => _handleItemLongPress(item),
-                              onScaleStart:
-                                  (details) =>
-                                      _handleItemScaleStart(item, details),
-                              onScaleUpdate:
-                                  (details) =>
-                                      _handleItemScaleUpdate(item, details),
-                            ),
-                          )
-                          .toList(),
+              child: RepaintBoundary(
+                key: _boardRepaintKey,
+                child: Container(
+                  color: const Color.fromARGB(255, 182, 168, 81),
+                  width: _boardWidth,
+                  height: _boardHeight,
+                  child: Stack(
+                    children:
+                        _items
+                            .map(
+                              (item) => BoardItemWidget(
+                                item: item,
+                                isSelected: _selectedItem.contains(item),
+                                onTap: () => _handleItemTap(item),
+                                onLongPress: () => _handleItemLongPress(item),
+                                onScaleStart:
+                                    (details) =>
+                                        _handleItemScaleStart(item, details),
+                                onScaleUpdate:
+                                    (details) =>
+                                        _handleItemScaleUpdate(item, details),
+                              ),
+                            )
+                            .toList(),
+                  ),
                 ),
               ),
             ),
@@ -247,15 +270,60 @@ class _BoardViewState extends State<BoardView> {
     }
   }
 
+  Future<void> _loadBoardItems() async {
+    try {
+      final items = await _databaseService.loadBoardItems(widget.boardId);
+      if (!mounted) return;
+
+      setState(() {
+        _items
+          ..clear()
+          ..addAll(items);
+        _selectedItem.clear();
+      });
+    } catch (_) {
+      // Keep screen usable even if loading fails.
+    }
+  }
+
+  Future<String?> _captureBoardPreviewPath() async {
+    await Future<void>.delayed(const Duration(milliseconds: 16));
+
+    final boundary =
+        _boardRepaintKey.currentContext?.findRenderObject()
+            as RenderRepaintBoundary?;
+
+    if (boundary == null) return null;
+
+    final ui.Image image = await boundary.toImage(pixelRatio: 1.0);
+    final ByteData? byteData = await image.toByteData(
+      format: ui.ImageByteFormat.png,
+    );
+
+    if (byteData == null) return null;
+
+    final Uint8List pngBytes = byteData.buffer.asUint8List();
+    final Directory dir = await getApplicationDocumentsDirectory();
+    final String previewsDir = p.join(dir.path, 'board_previews');
+    await Directory(previewsDir).create(recursive: true);
+    final String filePath = p.join(previewsDir, 'board_${widget.boardId}.png');
+    await File(filePath).writeAsBytes(pngBytes, flush: true);
+
+    return filePath;
+  }
+
   Future<void> _saveBoard() async {
     try {
-      print('Saving board $_boardId');
+      final previewPath = await _captureBoardPreviewPath();
+
+      debugPrint('Saving board ${widget.boardId}');
       await _databaseService.saveBoard(
-        boardId: _boardId,
-        name: 'Main Board',
+        boardId: widget.boardId,
+        name: widget.boardName,
         height: _boardHeight,
         width: _boardWidth,
         items: _items,
+        previewPath: previewPath,
       );
 
       if (!mounted) return;
