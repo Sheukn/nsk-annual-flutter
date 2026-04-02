@@ -66,25 +66,48 @@ class _GalleryViewState extends State<GalleryView> {
 
   Future<void> _fetchImages(Album album) async {
     List<GalleryItem> images = [];
+    bool isLoading = true;
+    
     try {
       if (album.isServerAlbum()) {
         final serverDir = await widget.photoService!.getServerDirectory();
         
-        final serverPhotoUrls = await widget.photoService!.getServerPhotoList();
-        final serverFileNames = serverPhotoUrls.map((url) => url.split('/').last).toSet();
-        
-        final cachedFiles = await _loadImagesFromDirectory(serverDir);
-        for (final item in cachedFiles.where((i) => i.isFile)) {
-          final fileName = (item.image as File).path.split('/').last;
-          if (!serverFileNames.contains(fileName)) {
-            await (item.image as File).delete().catchError((_) => item.image as File);
-          }
+        // Show loading state
+        if (mounted) {
+          setState(() {
+            _selectedAlbum = album;
+            _images = [];
+          });
         }
         
-        if (widget.photoService != null && _selectedAlbum?.isServerAlbum() == true) {
-          for (final url in serverPhotoUrls) {
-            await widget.photoService!.downloadPhoto(url, serverDir);
+        try {
+          // Try to get list from server with timeout
+          final serverPhotoUrls = await widget.photoService!
+              .getServerPhotoList()
+              .timeout(
+                const Duration(seconds: 5),
+                onTimeout: () => [],
+              );
+          
+          if (serverPhotoUrls.isNotEmpty) {
+            final serverFileNames = serverPhotoUrls.map((url) => url.split('/').last).toSet();
+            
+            // Delete old cached files not on server
+            final cachedFiles = await _loadImagesFromDirectory(serverDir);
+            for (final item in cachedFiles.where((i) => i.isFile)) {
+              final fileName = (item.image as File).path.split('/').last;
+              if (!serverFileNames.contains(fileName)) {
+                await (item.image as File).delete().catchError((_) => item.image as File);
+              }
+            }
+            
+            // Download latest photos
+            for (final url in serverPhotoUrls) {
+              await widget.photoService!.downloadPhoto(url, serverDir);
+            }
           }
+        } catch (e) {
+          debugPrint('[GalleryView] Server unavailable: $e');
         }
         
         images = await _loadImagesFromDirectory(serverDir);
@@ -101,10 +124,12 @@ class _GalleryViewState extends State<GalleryView> {
       }
     }
 
-    setState(() {
-      _selectedAlbum = album;
-      _images = images.reversed.toList();
-    });
+    if (mounted) {
+      setState(() {
+        _selectedAlbum = album;
+        _images = images.reversed.toList();
+      });
+    }
   }
 
   Future<List<GalleryItem>> _loadImagesFromDirectory(Directory dir) async {
