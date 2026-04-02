@@ -8,6 +8,7 @@ import 'package:flutter_pa_snk/features/postit/postit_edit_view.dart';
 import 'package:flutter_pa_snk/models/board_item.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:photo_manager/photo_manager.dart';
 import 'widgets/board_item_widget.dart';
 import 'widgets/control_sliders.dart';
 import 'widgets/board_action_menu.dart';
@@ -134,8 +135,8 @@ class _BoardViewState extends State<BoardView> {
                 onBringToFront: _bringToFront,
                 onSendToBack: _sendToBack,
                 onEdit:
-                    _selectedItem.length == 1 && !_selectedItem.first.isImage
-                        ? _editPostIt
+                    _selectedItem.length == 1
+                        ? (_selectedItem.first.isImage ? () => _pickGalleryImageForItem(_selectedItem.first) : _editPostIt)
                         : null,
               ),
             ),
@@ -161,13 +162,17 @@ class _BoardViewState extends State<BoardView> {
   }
 
   void _handleItemLongPress(BoardItem item) {
-    setState(() {
-      if (_selectedItem.contains(item)) {
-        _selectedItem.remove(item);
-      } else {
-        _selectedItem.add(item);
-      }
-    });
+    if (item.isImage) {
+      _pickGalleryImageForItem(item);
+    } else {
+      setState(() {
+        if (_selectedItem.contains(item)) {
+          _selectedItem.remove(item);
+        } else {
+          _selectedItem.add(item);
+        }
+      });
+    }
   }
 
   void _handleItemScaleStart(BoardItem item, ScaleStartDetails details) {
@@ -185,21 +190,173 @@ class _BoardViewState extends State<BoardView> {
   }
   final _uuid = const Uuid();
 
-  void _addImage() {
+  /// Opens a bottom-sheet gallery picker and returns the chosen asset.
+  Future<AssetEntity?> _showGalleryPicker() async {
+    final PermissionState ps = await PhotoManager.requestPermissionExtend();
+    if (!ps.isAuth) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Gallery permission denied')),
+        );
+      }
+      return null;
+    }
+
+    final albums = await PhotoManager.getAssetPathList(type: RequestType.image);
+    if (albums.isEmpty) return null;
+
+    // Load images from the first album (recents).
+    List<AssetEntity> images = await albums.first.getAssetListPaged(
+      page: 0,
+      size: 100,
+    );
+
+    if (!mounted) return null;
+
+    // Show bottom-sheet grid picker.
+    final AssetEntity? picked = await showModalBottomSheet<AssetEntity>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          minChildSize: 0.4,
+          maxChildSize: 0.92,
+          expand: false,
+          builder: (_, scrollController) => Container(
+            decoration: const BoxDecoration(
+              color: Color(0xFF1E1E1E),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
+              children: [
+                const SizedBox(height: 8),
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Choose from Gallery',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: GridView.builder(
+                    controller: scrollController,
+                    padding: const EdgeInsets.all(8),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 3,
+                      crossAxisSpacing: 4,
+                      mainAxisSpacing: 4,
+                    ),
+                    itemCount: images.length,
+                    itemBuilder: (_, i) {
+                      final asset = images[i];
+                      return GestureDetector(
+                        onTap: () => Navigator.of(ctx).pop(asset),
+                        child: FutureBuilder<Uint8List?>(
+                          future: asset.thumbnailDataWithSize(
+                            const ThumbnailSize.square(200),
+                          ),
+                          builder: (_, snap) {
+                            if (snap.hasData && snap.data != null) {
+                              return Image.memory(
+                                snap.data!,
+                                fit: BoxFit.cover,
+                              );
+                            }
+                            return Container(color: Colors.white10);
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    return picked;
+  }
+
+  void _addImage() async {
+    final asset = await _showGalleryPicker();
+    if (asset == null) return;
+
+    final file = await asset.file;
+    if (file == null) return;
+    final filePath = file.path;
+
+    final id = _uuid.v4();
+    final aspect = asset.width > 0 && asset.height > 0 ? (asset.width / asset.height) : (4.0 / 3.0);
+    final width = 200.0;
+    final height = width / aspect;
+
+    final item = BoardItem(
+      id: id,
+      position: Position(x: 400, y: 400),
+      size: Size(width: width, height: height),
+      color: Colors.transparent, // transparent for images so no background
+      rotation: 0,
+      isImage: true,
+      imagePath: filePath,
+    );
+
+    // Immediately insert into DB so the link is persisted.
+    await _databaseService.insertBoardAsset(
+      boardId: widget.boardId,
+      assetName: id,
+      x: item.position.x,
+      y: item.position.y,
+      rotation: item.rotation,
+      src: filePath,
+    );
+
+    if (!mounted) return;
     setState(() {
-      _items.add(
-        BoardItem(
-          id: _uuid.v4(),
-          position: Position(x: 400, y: 400),
-          size: Size(width: 200, height: 150),
-          color: Colors.grey,
-          rotation: 0,
-          isImage: true,
-        ),
-      );
+      _items.add(item);
     });
   }
 
+  /// Opens gallery picker for an existing image item and updates DB + state.
+  void _pickGalleryImageForItem(BoardItem item) async {
+    final asset = await _showGalleryPicker();
+    if (asset == null) return;
+
+    final file = await asset.file;
+    if (file == null) return;
+    final filePath = file.path;
+
+    await _databaseService.updateBoardAssetSrc(
+      boardId: widget.boardId,
+      assetName: item.id,
+      src: filePath,
+    );
+
+    if (!mounted) return;
+    setState(() {
+      item.imagePath = filePath;
+      item.color = Colors.transparent;
+      if (asset.width > 0 && asset.height > 0) {
+        final aspect = asset.width / asset.height;
+        item.size = Size(width: item.size.width, height: item.size.width / aspect);
+      }
+    });
+  }
 
   void _addPostIt() {
     final id = _uuid.v4();

@@ -2,6 +2,8 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_pa_snk/models/board_item.dart';
+import 'dart:io';
+import 'dart:ui' as ui;
 
 class SavedBoard {
   final int id;
@@ -131,23 +133,52 @@ class DatabaseService {
       orderBy: 'rowid ASC',
     );
 
-    return rows.map((row) {
-      final src = row['src'] as String?;
-      final isImage = src == null;
+    final items = <BoardItem>[];
 
-      return BoardItem(
+    for (final row in rows) {
+      final src = row['src'] as String?;
+      // Post-its are identified by the 'postit_' keyword in their filename/path
+      final isPostIt = src != null && src.contains('postit_');
+      final isImage = !isPostIt;
+      
+      var width = isImage ? 200.0 : 150.0;
+      var height = 150.0;
+      var color = isImage ? const Color(0xFF9E9E9E) : const Color(0xFFFFFF00);
+
+      if (isImage && src != null) {
+        color = Colors.transparent;
+        try {
+          final file = File(src);
+          if (file.existsSync()) {
+            final bytes = file.readAsBytesSync();
+            final codec = await ui.instantiateImageCodec(bytes);
+            final frame = await codec.getNextFrame();
+            if (frame.image.width > 0 && frame.image.height > 0) {
+              final aspect = frame.image.width / frame.image.height;
+              height = width / aspect;
+            }
+          }
+        } catch (_) {
+          // Fallback height if image can't be decoded
+          height = 150.0;
+        }
+      }
+
+      items.add(BoardItem(
         id: row['asset_name'] as String,
         position: Position(
           x: ((row['x_position'] as num?) ?? 0).toDouble(),
           y: ((row['y_position'] as num?) ?? 0).toDouble(),
         ),
-        size: Size(width: isImage ? 200 : 150, height: isImage ? 150 : 150),
-        color: isImage ? const Color(0xFF9E9E9E) : const Color(0xFFFFFF00),
+        size: Size(width: width, height: height),
+        color: color,
         rotation: ((row['rotation'] as num?) ?? 0).toDouble(),
         isImage: isImage,
         imagePath: src,
-      );
-    }).toList();
+      ));
+    }
+
+    return items;
   }
 
   Future<void> saveBoard({
@@ -219,5 +250,44 @@ class DatabaseService {
         });
       }
     });
+  }
+
+  /// Inserts a single Board_Asset row immediately (used when adding an image
+  /// to the board so the link is persisted without a full save).
+  Future<void> insertBoardAsset({
+    required int boardId,
+    required String assetName,
+    required double x,
+    required double y,
+    required double rotation,
+    String? src,
+  }) async {
+    final db = await database;
+    final now = DateTime.now().toIso8601String();
+    await db.insert('Board_Asset', {
+      'board_id': boardId,
+      'asset_name': assetName,
+      'scale': 1.0,
+      'rotation': rotation,
+      'x_position': x,
+      'y_position': y,
+      'src': src,
+      'last_update': now,
+    });
+  }
+
+  /// Updates the src (file path) of an existing Board_Asset row.
+  Future<void> updateBoardAssetSrc({
+    required int boardId,
+    required String assetName,
+    required String src,
+  }) async {
+    final db = await database;
+    await db.update(
+      'Board_Asset',
+      {'src': src, 'last_update': DateTime.now().toIso8601String()},
+      where: 'board_id = ? AND asset_name = ?',
+      whereArgs: [boardId, assetName],
+    );
   }
 } 

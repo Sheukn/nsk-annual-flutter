@@ -31,8 +31,8 @@ class BoardActionMenu extends StatelessWidget {
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
       width:
-          selectedItems.isNotEmpty && !selectedItems.first.isImage
-              ? 250
+          selectedItems.length == 1 && onEdit != null
+              ? 280
               : selectedItems.isNotEmpty
               ? 200
               : 120,
@@ -96,11 +96,9 @@ class BoardActionMenu extends StatelessWidget {
           icon: const Icon(Icons.arrow_downward, color: Colors.white),
           onPressed: onSendToBack,
         ),
-        if (selectedItems.length == 1 &&
-            !selectedItems.first.isImage &&
-            onEdit != null)
+        if (selectedItems.length == 1 && onEdit != null)
           IconButton(
-            icon: const Icon(Icons.edit, color: Colors.white),
+            icon: Icon(selectedItems.first.isImage ? Icons.add_photo_alternate : Icons.edit, color: Colors.white),
             onPressed: onEdit,
           ),
       ],

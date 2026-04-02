@@ -26,18 +26,36 @@ class BoardItemWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     Widget content;
 
-    if (item.imagePath != null && File(item.imagePath!).existsSync()) {
-      debugPrint("Loading image from path: ${item.imagePath}");
+    if (item.isImage && item.imagePath != null && File(item.imagePath!).existsSync()) {
       content = Image.file(
         File(item.imagePath!),
-        fit: BoxFit.contain, 
+        fit: BoxFit.cover,
+      );
+    } else if (item.isImage) {
+      // Placeholder shown before a gallery image is picked.
+      content = Container(
+        color: const Color(0xFF2C2C2C),
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.add_photo_alternate_outlined, color: Colors.white54, size: 36),
+            SizedBox(height: 6),
+            Text(
+              'Tap to pick image',
+              style: TextStyle(color: Colors.white54, fontSize: 11),
+            ),
+          ],
+        ),
       );
     } else {
-      debugPrint("No valid image found at path: ${item.imagePath}, displaying placeholder");
-      debugPrint("Item details - ID: ${item.id}, isImage: ${item.isImage}, imagePath: ${item.imagePath}");
-      content = Center(
-        child: Text(item.id.toString(), style: const TextStyle(color: Colors.white)),
-      );
+      // Post-it or other item with an explicit imagePath (e.g. postit PNG).
+      if (item.imagePath != null && File(item.imagePath!).existsSync()) {
+        content = Image.file(File(item.imagePath!), fit: BoxFit.contain);
+      } else {
+        content = Center(
+          child: Text(item.id.toString(), style: const TextStyle(color: Colors.white)),
+        );
+      }
     }
     return Positioned(
       left: item.position.x,

@@ -79,7 +79,14 @@ class _BoardListViewState extends State<BoardListView> {
       );
     }
 
-    return Image.file(file, fit: BoxFit.cover);
+    final provider = FileImage(file);
+    provider.evict(); // Evict cache to ensure it reloads the latest saved preview
+
+    return Image(
+      image: provider,
+      key: ValueKey(file.lastModifiedSync().millisecondsSinceEpoch),
+      fit: BoxFit.cover,
+    );
   }
 
   @override
