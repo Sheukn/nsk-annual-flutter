@@ -66,10 +66,10 @@ class RotationSlider extends StatelessWidget {
 }
 
 class SizeSlider extends StatelessWidget {
-  final double width;
+  final double scale;
   final Function(double) onChanged;
 
-  const SizeSlider({super.key, required this.width, required this.onChanged});
+  const SizeSlider({super.key, required this.scale, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -108,9 +108,9 @@ class SizeSlider extends StatelessWidget {
               child: RotatedBox(
                 quarterTurns: 3,
                 child: Slider(
-                  value: width,
-                  min: 50,
-                  max: 500,
+                  value: scale,
+                  min: 0.1,
+                  max: 2.5,
                   activeColor: Colors.white,
                   inactiveColor: Colors.white24,
                   onChanged: onChanged,

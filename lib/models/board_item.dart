@@ -6,6 +6,7 @@ class BoardItem {
   Position position;
   Size size;
   double rotation;
+  double scale;
   bool isImage;
   Color? backgroundColor;
   String? imagePath;
@@ -16,6 +17,7 @@ class BoardItem {
     required this.position,
     required this.size,
     this.rotation = 0.0,
+    this.scale = 1.0,
     this.isImage = false,
     this.backgroundColor,
     this.imagePath,

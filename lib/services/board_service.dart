@@ -43,7 +43,7 @@ class BoardService {
         return {
           'asset_name': item.id,
           'src': item.imagePath ?? '',
-          'scale': 1.0,
+          'scale': item.scale,
           'rotation': item.rotation,
           'x_position': item.position.x,
           'y_position': item.position.y,

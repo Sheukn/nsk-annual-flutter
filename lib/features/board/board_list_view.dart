@@ -286,46 +286,41 @@ class _BoardListViewState extends State<BoardListView> {
       );
 
       final serverBoards = await _networkService.fetchAllBoards();
+      for (final board in serverBoards) {
+        debugPrint('Fetched Board from Server: ${board.id} - ${board.name}');
+      }
+      final localBoards = await _databaseService.getBoards();
+      for (final localBoard in localBoards) {
+        debugPrint('Local Board: ${localBoard.id} - ${localBoard.name}');
+      }
+      final localBoardIds = {for (var b in localBoards) b.id};
 
       if (!mounted) return;
       Navigator.pop(context);
 
       int syncedCount = 0;
       for (final boardDto in serverBoards) {
-        final localBoards = await _databaseService.getBoards();
-        SavedBoard? matchingBoard;
-
-        for (final localBoard in localBoards) {
-          if (localBoard.id == boardDto.id) {
-            matchingBoard = localBoard;
-            break;
-          }
-        }
-
-        if (matchingBoard != null) {
-          await _databaseService.updateBoardName(matchingBoard.id, boardDto.name);
-          
+        if (localBoardIds.contains(boardDto.id)) {
+          await _databaseService.updateBoardName(boardDto.id, boardDto.name);
           if (boardDto.previewSrc != null) {
             await _databaseService.updateBoardPreviewSrc(
-              boardId: matchingBoard.id,
+              boardId: boardDto.id,
               previewSrc: boardDto.previewSrc!,
             );
           }
-          syncedCount++;
         } else {
           final newBoardId = await _databaseService.createBoard(
+            id: boardDto.id,
             name: boardDto.name,
             height: boardDto.height,
             width: boardDto.width,
           );
-
           if (boardDto.previewSrc != null) {
             await _databaseService.updateBoardPreviewSrc(
               boardId: newBoardId,
               previewSrc: boardDto.previewSrc!,
             );
           }
-
           for (final assetDto in boardDto.assets) {
             await _databaseService.insertBoardAsset(
               boardId: newBoardId,
@@ -333,12 +328,12 @@ class _BoardListViewState extends State<BoardListView> {
               x: assetDto.xPosition,
               y: assetDto.yPosition,
               rotation: assetDto.rotation,
+              scale: assetDto.scale,
               src: assetDto.src,
             );
           }
-
-          syncedCount++;
         }
+        syncedCount++;
       }
 
       if (!mounted) return;

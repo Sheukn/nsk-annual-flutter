@@ -72,33 +72,36 @@ class BoardItemWidget extends StatelessWidget {
         onScaleUpdate: onScaleUpdate,
         onTap: onTap,
         onLongPress: onLongPress,
-        child: Transform.rotate(
-          angle: item.rotation,
-          child: Container(
-            width: item.size.width,
-            height: item.size.height,
-            decoration: BoxDecoration(
-              color: item.color,
-              border: isSelected 
-                ? Border.all(color: Colors.blue, width: 3) 
-                : Border.all(color: Colors.grey.shade300, width: 1),
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: [
-                if (isSelected)
+        child: Transform.scale(
+          scale: item.scale,
+          child: Transform.rotate(
+            angle: item.rotation,
+            child: Container(
+              width: item.size.width,
+              height: item.size.height,
+              decoration: BoxDecoration(
+                color: item.color,
+                border: isSelected 
+                  ? Border.all(color: Colors.blue, width: 3) 
+                  : Border.all(color: Colors.grey.shade300, width: 1),
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  if (isSelected)
+                    BoxShadow(
+                      color: Colors.blue.withAlpha(120),
+                      blurRadius: 16,
+                      spreadRadius: 2,
+                      offset: const Offset(0, 4),
+                    ),
                   BoxShadow(
-                    color: Colors.blue.withAlpha(120),
-                    blurRadius: 16,
-                    spreadRadius: 2,
-                    offset: const Offset(0, 4),
+                    color: Colors.black.withOpacity(0.15),
+                    blurRadius: 8,
+                    offset: const Offset(2, 2),
                   ),
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.15),
-                  blurRadius: 8,
-                  offset: const Offset(2, 2),
-                ),
-              ],
+                ],
+              ),
+              child: content,
             ),
-            child: content,
           ),
         ),
       ),

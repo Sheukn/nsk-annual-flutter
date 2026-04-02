@@ -88,6 +88,7 @@ class _GalleryViewState extends State<GalleryView> {
         }
         
         images = await _loadImagesFromDirectory(serverDir);
+      } else {
         final assets = await album.assetPath!.getAssetListPaged(page: 0, size: 100);
         images = assets
             .map((a) => GalleryItem(name: a.title ?? 'Media', image: a, isFile: false, createDate: a.createDateTime))

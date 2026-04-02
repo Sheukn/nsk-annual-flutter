@@ -84,10 +84,11 @@ class DatabaseService {
     required String name,
     required double height,
     required double width,
+    String? id,
   }) async {
     final db = await database;
     final now = DateTime.now().toIso8601String();
-    final boardUuid = const Uuid().v4();
+    final boardUuid = id ?? const Uuid().v4();
 
     await db.insert('Board', {
       'id': boardUuid,
@@ -168,6 +169,7 @@ class DatabaseService {
         size: Size(width: width, height: height),
         color: color,
         rotation: ((row['rotation'] as num?) ?? 0).toDouble(),
+        scale: ((row['scale'] as num?) ?? 1.0).toDouble(),
         isImage: isImage,
         imagePath: src,
       ));
@@ -236,7 +238,7 @@ class DatabaseService {
         await txn.insert('Board_Asset', {
           'board_id': boardId,
           'asset_name': item.id,
-          'scale': 1.0,
+          'scale': item.scale,
           'rotation': item.rotation,
           'x_position': item.position.x,
           'y_position': item.position.y,
@@ -255,6 +257,7 @@ class DatabaseService {
     required double x,
     required double y,
     required double rotation,
+    double scale = 1.0,
     String? src,
   }) async {
     final db = await database;
@@ -262,7 +265,7 @@ class DatabaseService {
     await db.insert('Board_Asset', {
       'board_id': boardId,
       'asset_name': assetName,
-      'scale': 1.0,
+      'scale': scale,
       'rotation': rotation,
       'x_position': x,
       'y_position': y,
@@ -324,23 +327,30 @@ class DatabaseService {
     );
   }
 
-  /// Updates position, rotation, and size of a board asset.
+  /// Updates position, rotation, and scale of a board asset.
   Future<void> updateBoardAssetPosition({
     required String boardId,
     required String assetName,
     required double x,
     required double y,
     required double rotation,
+    double? scale,
   }) async {
     final db = await database;
+    final updates = <String, Object?>{
+      'x_position': x,
+      'y_position': y,
+      'rotation': rotation,
+      'last_update': DateTime.now().toIso8601String(),
+    };
+    
+    if (scale != null) {
+      updates['scale'] = scale;
+    }
+    
     await db.update(
       'Board_Asset',
-      {
-        'x_position': x,
-        'y_position': y,
-        'rotation': rotation,
-        'last_update': DateTime.now().toIso8601String(),
-      },
+      updates,
       where: 'board_id = ? AND asset_name = ?',
       whereArgs: [boardId, assetName],
     );

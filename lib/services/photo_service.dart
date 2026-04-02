@@ -127,14 +127,12 @@ class PhotoService {
     }
   }
 
-  /// Download a photo from server to local directory
+  /// Download a photo from server to local directory (overwrites if exists)
   Future<void> downloadPhoto(String url, Directory targetDir) async {
     try {
       final fileName = url.split('/').last;
       final filePath = '${targetDir.path}/$fileName';
       final file = File(filePath);
-      
-      if (await file.exists()) return;
       
       final normalizedUrl = _normalizeUrl(url);
       final response = await http.get(Uri.parse(normalizedUrl)).timeout(_requestTimeout);

@@ -183,20 +183,24 @@ class _BoardViewState extends State<BoardView> {
                   x: activeItem!.position.x,
                   y: activeItem!.position.y,
                   rotation: value,
+                  scale: activeItem!.scale,
                 );
               },
             ),
             SizeSlider(
-              width: activeItem!.size.width,
+              scale: activeItem!.scale,
               onChanged:
-                  (value) => setState(() {
-                    activeItem!.size = Size(
-                      width: value,
-                      height:
-                          value *
-                          (activeItem!.size.height / activeItem!.size.width),
-                    );
-                  }),
+                  (value) async {
+                setState(() => activeItem!.scale = value);
+                await _databaseService.updateBoardAssetPosition(
+                  boardId: widget.boardId,
+                  assetName: activeItem!.id,
+                  x: activeItem!.position.x,
+                  y: activeItem!.position.y,
+                  rotation: activeItem!.rotation,
+                  scale: value,
+                );
+              },
             ),
           ],
           Align(
@@ -275,6 +279,7 @@ class _BoardViewState extends State<BoardView> {
       x: item.position.x,
       y: item.position.y,
       rotation: item.rotation,
+      scale: item.scale,
     );
   }
   final _uuid = const Uuid();
@@ -410,6 +415,7 @@ class _BoardViewState extends State<BoardView> {
       x: item.position.x,
       y: item.position.y,
       rotation: item.rotation,
+      scale: item.scale,
       src: filePath,
     );
 
