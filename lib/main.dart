@@ -51,8 +51,8 @@ class _MyHomePageState extends State<MyHomePage> {
     super.initState();
     _connectionService = ConnectionService();
     _photoService = PhotoService();
-    _connectionService.checkServerHealth(); // Check once at startup
-    _connectionService.startHealthCheck(); // Start periodic health checks
+    _connectionService.checkServerHealth();
+    _connectionService.startHealthCheck();
   }
 
   @override

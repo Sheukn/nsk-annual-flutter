@@ -224,12 +224,10 @@ class _BoardListViewState extends State<BoardListView> {
 
   Future<void> _uploadBoardToServer(SavedBoard board) async {
     try {
-      // Load board items
       final items = await _databaseService.loadBoardItems(board.id);
 
       if (!mounted) return;
 
-      // Show loading dialog
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -244,7 +242,6 @@ class _BoardListViewState extends State<BoardListView> {
         ),
       );
 
-      // Upload the board using the board ID (UUID)
       await _networkService.uploadBoard(
         boardId: board.id,
         name: board.name,
@@ -262,7 +259,7 @@ class _BoardListViewState extends State<BoardListView> {
       );
     } catch (e) {
       if (!mounted) return;
-      Navigator.pop(context); // Close loading dialog
+      Navigator.pop(context);
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to upload board: $e')),
@@ -274,7 +271,6 @@ class _BoardListViewState extends State<BoardListView> {
     try {
       if (!mounted) return;
 
-      // Show loading dialog
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -289,16 +285,13 @@ class _BoardListViewState extends State<BoardListView> {
         ),
       );
 
-      // Fetch all boards from server
       final serverBoards = await _networkService.fetchAllBoards();
 
       if (!mounted) return;
-      Navigator.pop(context); // Close loading dialog
+      Navigator.pop(context);
 
-      // Sync with local database
       int syncedCount = 0;
       for (final boardDto in serverBoards) {
-        // Try to find matching local board by ID (both are now UUIDs)
         final localBoards = await _databaseService.getBoards();
         SavedBoard? matchingBoard;
 
@@ -310,10 +303,8 @@ class _BoardListViewState extends State<BoardListView> {
         }
 
         if (matchingBoard != null) {
-          // Update existing board metadata
           await _databaseService.updateBoardName(matchingBoard.id, boardDto.name);
           
-          // Update preview if provided
           if (boardDto.previewSrc != null) {
             await _databaseService.updateBoardPreviewSrc(
               boardId: matchingBoard.id,
@@ -322,14 +313,12 @@ class _BoardListViewState extends State<BoardListView> {
           }
           syncedCount++;
         } else {
-          // Create new board from server with same UUID as server
           final newBoardId = await _databaseService.createBoard(
             name: boardDto.name,
             height: boardDto.height,
             width: boardDto.width,
           );
 
-          // Update preview if provided
           if (boardDto.previewSrc != null) {
             await _databaseService.updateBoardPreviewSrc(
               boardId: newBoardId,
@@ -337,7 +326,6 @@ class _BoardListViewState extends State<BoardListView> {
             );
           }
 
-          // Save assets from server
           for (final assetDto in boardDto.assets) {
             await _databaseService.insertBoardAsset(
               boardId: newBoardId,
@@ -355,7 +343,6 @@ class _BoardListViewState extends State<BoardListView> {
 
       if (!mounted) return;
 
-      // Refresh the board list
       await _refreshBoards();
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -364,7 +351,6 @@ class _BoardListViewState extends State<BoardListView> {
     } catch (e) {
       if (!mounted) return;
       
-      // Try to close loading dialog safely
       if (Navigator.canPop(context)) {
         Navigator.pop(context);
       }
@@ -391,7 +377,7 @@ class _BoardListViewState extends State<BoardListView> {
     }
 
     final provider = FileImage(file);
-    provider.evict(); // Evict cache to ensure it reloads the latest saved preview
+    provider.evict();
 
     return Image(
       image: provider,

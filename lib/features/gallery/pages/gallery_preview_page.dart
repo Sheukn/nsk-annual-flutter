@@ -43,7 +43,6 @@ class _GalleryPreviewPageState extends State<GalleryPreviewPage> {
     if (item.isFile) {
       path = (item.image as File).path;
     } else {
-      // For AssetEntity, use the name
       final asset = item.image as AssetEntity;
       path = asset.title ?? '';
     }
@@ -64,7 +63,6 @@ class _GalleryPreviewPageState extends State<GalleryPreviewPage> {
     if (item.isFile) {
       return item.image as File;
     } else {
-      // For AssetEntity, get the file
       final asset = item.image as AssetEntity;
       return await asset.file;
     }
@@ -95,7 +93,6 @@ class _GalleryPreviewPageState extends State<GalleryPreviewPage> {
           final isVideo = _isVideoFile(item);
           
           if (isVideo) {
-            // Show video player for both File and AssetEntity videos
             return PhotoViewGalleryPageOptions.customChild(
               child: FutureBuilder<File?>(
                 future: _getVideoFile(item),

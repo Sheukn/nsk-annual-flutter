@@ -283,7 +283,6 @@ class _PostItEditViewState extends State<PostItEditView> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Color & Size Row
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -351,7 +350,6 @@ class _PostItEditViewState extends State<PostItEditView> {
             ],
           ),
           const SizedBox(height: 12),
-          // Drawing Tools Row
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [

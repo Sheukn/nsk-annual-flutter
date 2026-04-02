@@ -50,8 +50,6 @@ class BoardService {
         };
       }).toList();
 
-      //Post all asset 
-
       final body = {
         'name': name,
         'width': width,

@@ -73,7 +73,6 @@ class _GalleryViewState extends State<GalleryView> {
         final serverPhotoUrls = await widget.photoService!.getServerPhotoList();
         final serverFileNames = serverPhotoUrls.map((url) => url.split('/').last).toSet();
         
-        // Delete stale files from cache
         final cachedFiles = await _loadImagesFromDirectory(serverDir);
         for (final item in cachedFiles.where((i) => i.isFile)) {
           final fileName = (item.image as File).path.split('/').last;
@@ -82,14 +81,12 @@ class _GalleryViewState extends State<GalleryView> {
           }
         }
         
-        // Download new photos from server ONLY if server album is still selected
         if (widget.photoService != null && _selectedAlbum?.isServerAlbum() == true) {
           for (final url in serverPhotoUrls) {
             await widget.photoService!.downloadPhoto(url, serverDir);
           }
         }
         
-        // Load all photos from cache
         images = await _loadImagesFromDirectory(serverDir);
         final assets = await album.assetPath!.getAssetListPaged(page: 0, size: 100);
         images = assets

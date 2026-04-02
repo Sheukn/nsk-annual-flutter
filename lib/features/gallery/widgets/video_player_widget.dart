@@ -22,7 +22,6 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
     super.initState();
     _controller = VideoPlayerController.file(widget.videoFile);
     _initializeVideoPlayerFuture = _controller.initialize();
-    // Listen to video controller changes to update UI
     _controller.addListener(_onVideoControllerUpdate);
   }
 
@@ -43,20 +42,17 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
       future: _initializeVideoPlayerFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.done) {
-          // Video loaded successfully
           if (_controller.value.isInitialized) {
             return Stack(
               fit: StackFit.expand,
               alignment: Alignment.center,
               children: [
-                // Video player
                 Center(
                   child: AspectRatio(
                     aspectRatio: _controller.value.aspectRatio,
                     child: VideoPlayer(_controller),
                   ),
                 ),
-                // Play/Pause overlay button
                 GestureDetector(
                   onTap: () {
                     setState(() {
@@ -84,7 +80,7 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
                           ),
                   ),
                 ),
-                // Video controls at bottom
+
                 Positioned(
                   bottom: 0,
                   left: 0,
@@ -98,7 +94,6 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Progress bar
                         VideoProgressIndicator(
                           _controller,
                           allowScrubbing: true,
@@ -109,7 +104,6 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        // Time display
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [

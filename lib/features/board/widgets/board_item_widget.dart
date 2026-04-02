@@ -32,7 +32,6 @@ class BoardItemWidget extends StatelessWidget {
         fit: BoxFit.cover,
       );
     } else if (item.isImage) {
-      // Placeholder shown before a gallery image is picked.
       content = Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -57,7 +56,6 @@ class BoardItemWidget extends StatelessWidget {
         ),
       );
     } else {
-      // Post-it or other item with an explicit imagePath (e.g. postit PNG).
       if (item.imagePath != null && File(item.imagePath!).existsSync()) {
         content = Image.file(File(item.imagePath!), fit: BoxFit.contain);
       } else {

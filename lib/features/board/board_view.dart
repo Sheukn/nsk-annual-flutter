@@ -16,7 +16,7 @@ import 'widgets/board_action_menu.dart';
 import 'package:uuid/uuid.dart';
 
 class BoardView extends StatefulWidget {
-  final String boardId; // UUID
+  final String boardId;
   final String boardName;
 
   const BoardView({
@@ -48,7 +48,6 @@ class _BoardViewState extends State<BoardView> {
     super.initState();
     _transformationController = TransformationController();
     _loadBoardItems();
-    // Center the board on first load
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _centerBoard();
     });
@@ -66,12 +65,10 @@ class _BoardViewState extends State<BoardView> {
     final viewportWidth = screenSize.width;
     final viewportHeight = screenSize.height - appBarHeight;
 
-    // Calculate scale to fit the board in the viewport
     final scaleX = viewportWidth / _boardWidth;
     final scaleY = viewportHeight / _boardHeight;
-    final scale = (scaleX < scaleY ? scaleX : scaleY) * 0.9; // 90% to leave margins
+    final scale = (scaleX < scaleY ? scaleY : scaleY) * 0.9;
 
-    // Calculate translation to center the board
     final boardScaledWidth = _boardWidth * scale;
     final boardScaledHeight = _boardHeight * scale;
     final translateX = (viewportWidth - boardScaledWidth) / 2;
@@ -272,7 +269,6 @@ class _BoardViewState extends State<BoardView> {
       item.position.x += details.focalPointDelta.dx;
       item.position.y += details.focalPointDelta.dy;
     });
-    // Save position to database
     _databaseService.updateBoardAssetPosition(
       boardId: widget.boardId,
       assetName: item.id,
@@ -298,7 +294,6 @@ class _BoardViewState extends State<BoardView> {
     final albums = await PhotoManager.getAssetPathList(type: RequestType.image);
     if (albums.isEmpty) return null;
 
-    // Load images from the first album (recents).
     List<AssetEntity> images = await albums.first.getAssetListPaged(
       page: 0,
       size: 100,
@@ -306,7 +301,6 @@ class _BoardViewState extends State<BoardView> {
 
     if (!mounted) return null;
 
-    // Show bottom-sheet grid picker.
     final AssetEntity? picked = await showModalBottomSheet<AssetEntity>(
       context: context,
       isScrollControlled: true,
@@ -592,7 +586,6 @@ class _BoardViewState extends State<BoardView> {
     try {
       if (!mounted) return;
       
-      // Show loading dialog
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -607,10 +600,8 @@ class _BoardViewState extends State<BoardView> {
         ),
       );
 
-      // Capture the preview path
       final previewPath = await _captureBoardPreviewPath();
 
-      // Upload the board using the UUID (boardId) with preview path
       await _networkService.uploadBoard(
         boardId: widget.boardId,
         name: widget.boardName,
@@ -628,7 +619,7 @@ class _BoardViewState extends State<BoardView> {
       );
     } catch (e) {
       if (!mounted) return;
-      Navigator.pop(context); // Close loading dialog
+      Navigator.pop(context);
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to upload board: $e')),

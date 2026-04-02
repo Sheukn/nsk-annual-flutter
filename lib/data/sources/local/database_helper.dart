@@ -27,7 +27,6 @@ class SavedBoard {
 }
 
 class DatabaseService {
-  // Pattern Singleton pour n'avoir qu'une seule instance de DB
   static final DatabaseService _instance = DatabaseService._internal();
   static Database? _database;
 
@@ -42,7 +41,6 @@ class DatabaseService {
   }
 
   Future<Database> _initDatabase() async {
-    // Récupère le chemin par défaut des bases de données sur l'appareil
     String path = join(await getDatabasesPath(), 'mon_projet.db');
 
     return await openDatabase(
@@ -52,7 +50,6 @@ class DatabaseService {
         await db.execute('PRAGMA foreign_keys = ON');
       },
       onCreate: (db, version) async {
-        // Table Board
         await db.execute('''
           CREATE TABLE Board (
             id TEXT PRIMARY KEY,
@@ -66,7 +63,6 @@ class DatabaseService {
           )
         ''');
 
-        // Table Board_Asset liée à Board
         await db.execute('''
           CREATE TABLE Board_Asset (
             board_id TEXT NOT NULL,
