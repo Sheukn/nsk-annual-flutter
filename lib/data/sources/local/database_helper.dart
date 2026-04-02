@@ -290,4 +290,14 @@ class DatabaseService {
       whereArgs: [boardId, assetName],
     );
   }
+
+  /// Deletes a board and all its associated assets.
+  Future<void> deleteBoard(int boardId) async {
+    final db = await database;
+    await db.delete(
+      'Board',
+      where: 'id = ?',
+      whereArgs: [boardId],
+    );
+  }
 } 

@@ -64,6 +64,33 @@ class _BoardListViewState extends State<BoardListView> {
     await _refreshBoards();
   }
 
+  Future<void> _deleteBoard(SavedBoard board) async {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Board'),
+        content: Text('Are you sure you want to delete "${board.name}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _databaseService.deleteBoard(board.id);
+              await _refreshBoards();
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPreview(SavedBoard board) {
     final previewPath = board.previewPath;
     if (previewPath == null || previewPath.isEmpty) {
@@ -91,11 +118,17 @@ class _BoardListViewState extends State<BoardListView> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        RefreshIndicator(
-          onRefresh: _refreshBoards,
-          child: FutureBuilder<List<SavedBoard>>(
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'Boards',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        elevation: 2,
+      ),
+      body: RefreshIndicator(
+        onRefresh: _refreshBoards,
+        child: FutureBuilder<List<SavedBoard>>(
             future: _boardsFuture,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
@@ -119,10 +152,38 @@ class _BoardListViewState extends State<BoardListView> {
               final boards = snapshot.data ?? const [];
               if (boards.isEmpty) {
                 return ListView(
-                  children: const [
-                    SizedBox(height: 120),
-                    Center(
-                      child: Text('No saved boards yet. Tap + to create one.'),
+                  children: [
+                    SizedBox(
+                      height: MediaQuery.of(context).size.height - 100,
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.dashboard,
+                              size: 64,
+                              color: Colors.grey.shade400,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No saved boards yet',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Tap + to create one',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey.shade500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 );
@@ -144,49 +205,65 @@ class _BoardListViewState extends State<BoardListView> {
                     itemCount: boards.length,
                     itemBuilder: (context, index) {
                       final board = boards[index];
-                      return InkWell(
-                        borderRadius: BorderRadius.circular(16),
-                        onTap: () => _openBoard(board),
-                        child: Ink(
-                          decoration: BoxDecoration(
-                            color: Colors.blueGrey.shade700,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Column(
-                            children: [
-                              Expanded(
-                                child: ClipRRect(
-                                  borderRadius: const BorderRadius.vertical(
-                                    top: Radius.circular(16),
-                                  ),
-                                  child: SizedBox.expand(
-                                    child: _buildPreview(board),
+                      return Material(
+                        color: Colors.transparent,
+                        child: GestureDetector(
+                          onTap: () => _openBoard(board),
+                          onLongPress: () => _deleteBoard(board),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.blueGrey.shade700,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.2),
+                                  offset: const Offset(0, 4),
+                                  blurRadius: 8,
+                                  spreadRadius: 0,
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              children: [
+                                Expanded(
+                                  child: ClipRRect(
+                                    borderRadius: const BorderRadius.vertical(
+                                      top: Radius.circular(12),
+                                    ),
+                                    child: SizedBox.expand(
+                                      child: _buildPreview(board),
+                                    ),
                                   ),
                                 ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.all(10),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        board.name,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          color: Colors.white,
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 10,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          board.name,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w500,
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                    const Icon(
-                                      Icons.arrow_forward_ios,
-                                      color: Colors.white,
-                                      size: 14,
-                                    ),
-                                  ],
+                                      const SizedBox(width: 8),
+                                      const Icon(
+                                        Icons.arrow_forward_ios,
+                                        color: Colors.white70,
+                                        size: 12,
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       );
@@ -197,15 +274,13 @@ class _BoardListViewState extends State<BoardListView> {
             },
           ),
         ),
-        Positioned(
-          right: 16,
-          bottom: 16,
-          child: FloatingActionButton(
-            onPressed: _createBoard,
-            child: const Icon(Icons.add),
-          ),
-        ),
-      ],
-    );
+        floatingActionButton: FloatingActionButton(
+        shape: const CircleBorder(),
+        elevation: 6,
+        onPressed: _createBoard,
+        child: const Icon(Icons.add, size: 28),
+      ),
+      );
+    
   }
 }

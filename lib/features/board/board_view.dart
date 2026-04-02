@@ -50,7 +50,11 @@ class _BoardViewState extends State<BoardView> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.boardName),
+        title: Text(
+          widget.boardName,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        elevation: 2,
         actions: [
           IconButton(
             tooltip: 'Save board',

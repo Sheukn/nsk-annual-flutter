@@ -20,8 +20,14 @@ class _GalleryItem {
   final String name;
   final dynamic image; // AssetEntity or File
   final bool isFile;
+  final DateTime createDate;
 
-  _GalleryItem({required this.name, required this.image, required this.isFile});
+  _GalleryItem({
+    required this.name,
+    required this.image,
+    required this.isFile,
+    required this.createDate,
+  });
 }
 
 class _Album {
@@ -37,6 +43,7 @@ class _GalleryViewState extends State<GalleryView> {
   List<_GalleryItem> _images = [];
   List<_Album> _albums = [];
   _Album? _selectedAlbum;
+  bool _groupByMonth = false; // Toggle between month and day grouping
 
   void _openGallery(int initialIndex) {
     Navigator.of(context).push(
@@ -54,7 +61,10 @@ class _GalleryViewState extends State<GalleryView> {
     if (ps.isAuth) {
       await _fetchAlbums();
       if (_albums.isNotEmpty) {
-        await _fetchImages(_albums.first);
+        // Load first device album instead of Server album
+        final deviceAlbumIndex = _albums.indexWhere((album) => !album.isServerAlbum());
+        final albumToLoad = deviceAlbumIndex > -1 ? _albums[deviceAlbumIndex] : _albums.first;
+        await _fetchImages(albumToLoad);
       }
     } else {
       if (!context.mounted) return;
@@ -103,13 +113,13 @@ class _GalleryViewState extends State<GalleryView> {
                 name: asset.title ?? 'Image',
                 image: asset,
                 isFile: false,
-              ))
+                createDate: asset.createDateTime,              ))
           .toList();
     }
 
     setState(() {
       _selectedAlbum = album;
-      _images = images;
+      _images = images.reversed.toList();
     });
   }
 
@@ -135,6 +145,7 @@ class _GalleryViewState extends State<GalleryView> {
               name: file.path.split('/').last,
               image: file,
               isFile: true,
+              createDate: file.lastModifiedSync(),
             ))
         .toList();
   }
@@ -243,12 +254,60 @@ class _GalleryViewState extends State<GalleryView> {
     }
   }
 
+  Map<String, List<_GalleryItem>> _groupImagesByMonthDay() {
+    final groupedMap = <String, List<_GalleryItem>>{};
+
+    for (final item in _images) {
+      final date = item.createDate;
+      final key = _groupByMonth
+          ? '${date.year}-${date.month.toString().padLeft(2, '0')}'
+          : '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+      
+      if (!groupedMap.containsKey(key)) {
+        groupedMap[key] = [];
+      }
+      groupedMap[key]!.add(item);
+    }
+
+    return groupedMap;
+  }
+
+  String _formatDateHeader(String dateStr) {
+    final parts = dateStr.split('-');
+    final year = int.parse(parts[0]);
+    final month = int.parse(parts[1]);
+    
+    final monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+                        'July', 'August', 'September', 'October', 'November', 'December'];
+    
+    if (_groupByMonth) {
+      return '${monthNames[month]} $year';
+    } else {
+      final day = int.parse(parts[2]);
+      return '${monthNames[month]} $day, $year';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Ma Galerie Locale"),
+        title: const Text(
+          'Gallery',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        elevation: 2,
         actions: [
+          // Show grouping toggle
+          IconButton(
+            icon: Icon(_groupByMonth ? Icons.calendar_month : Icons.calendar_today),
+            tooltip: _groupByMonth ? 'Group by day' : 'Group by month',
+            onPressed: () {
+              setState(() {
+                _groupByMonth = !_groupByMonth;
+              });
+            },
+          ),
           // Show upload button for device albums
           if (!(_selectedAlbum?.isServerAlbum() ?? false))
             IconButton(
@@ -260,6 +319,7 @@ class _GalleryViewState extends State<GalleryView> {
           if (_selectedAlbum?.isServerAlbum() ?? false)
             IconButton(
               icon: const Icon(Icons.refresh),
+              tooltip: 'Refresh',
               onPressed: () {
                 _fetchImages(_selectedAlbum!);
               },
@@ -267,22 +327,64 @@ class _GalleryViewState extends State<GalleryView> {
         ],
       ),
       drawer: Drawer(
-        child: ListView.builder(
-          itemCount: _albums.length,
-          itemBuilder: (context, index) {
-            final album = _albums[index];
-            return ListTile(
-              title: Text(album.name),
-              subtitle: album.isServerAlbum() 
-                  ? const Text('Cached on device', style: TextStyle(fontSize: 12))
-                  : null,
-              selected: album == _selectedAlbum,
-              onTap: () async {
-                await _fetchImages(album);
-                Navigator.pop(context);
-              },
-            );
-          },
+        child: SafeArea(
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(24),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.image, size: 40),
+                    SizedBox(height: 12),
+                    Text(
+                      'Albums',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: _albums.length,
+                  itemBuilder: (context, index) {
+                    final album = _albums[index];
+                    final isSelected = album == _selectedAlbum;
+                    return ListTile(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      title: Text(
+                        album.name,
+                        style: TextStyle(
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                      subtitle: album.isServerAlbum()
+                          ? const Text(
+                              'Cached on device',
+                              style: TextStyle(fontSize: 12),
+                            )
+                          : null,
+                      selected: isSelected,
+                      selectedTileColor: Colors.deepPurple.withAlpha(30),
+                      leading: Icon(
+                        album.isServerAlbum() ? Icons.cloud_done : Icons.photo_album,
+                        color: isSelected ? Colors.deepPurple : null,
+                      ),
+                      onTap: () async {
+                        await _fetchImages(album);
+                        Navigator.pop(context);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
       body: Column(
@@ -290,54 +392,165 @@ class _GalleryViewState extends State<GalleryView> {
           // Show offline indicator for cached photos
           if ((_selectedAlbum?.isServerAlbum() ?? false) && _images.isNotEmpty)
             Container(
-              color: Colors.blue[100],
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+              margin: const EdgeInsets.all(12),
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              decoration: BoxDecoration(
+                color: Colors.blue.withAlpha(20),
+                border: Border.all(color: Colors.blue[300]!),
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: Row(
                 children: [
-                  Icon(Icons.cloud_done, color: Colors.blue[700], size: 20),
-                  const SizedBox(width: 10),
-                  Text(
-                    'Cached - Available offline (${_images.length} photos)',
-                    style: TextStyle(
-                      color: Colors.blue[700],
-                      fontWeight: FontWeight.w500,
+                  Icon(Icons.cloud_done, color: Colors.blue[700], size: 22),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Cached Photos',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                        Text(
+                          '${_images.length} photos available offline',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-          Expanded(
-            child: GridView.builder(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
+          // Show empty state
+          if (_images.isEmpty)
+            Expanded(
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.image_not_supported,
+                      size: 64,
+                      color: Colors.grey[400],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'No photos',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Photos will appear here',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[500],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              itemCount: _images.length,
-              itemBuilder: (context, index) {
-                final item = _images[index];
-                return GestureDetector(
-                  onTap: () => _openGallery(index),
-                  child: item.isFile
-                      ? Image.file(
-                          item.image as File,
-                          fit: BoxFit.cover,
-                        )
-                      : AssetEntityImage(
-                          item.image as AssetEntity,
-                          isOriginal: false,
-                          thumbnailSize: const ThumbnailSize.square(200),
-                          fit: BoxFit.cover,
+            )
+          else
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(12),
+                children: () {
+                  final sorted = _groupImagesByMonthDay()
+                      .entries
+                      .toList();
+                  sorted.sort((a, b) => b.key.compareTo(a.key)); // Most recent first
+                  return sorted.map((entry) {
+                    final dateStr = entry.key;
+                    final items = entry.value;
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Date header
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 16, 12, 12),
+                          child: Text(
+                            _formatDateHeader(dateStr),
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey,
+                            ),
+                          ),
                         ),
-                );
-              },
+                        // Grid of photos for this date
+                        GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          padding: const EdgeInsets.symmetric(horizontal: 0),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                            childAspectRatio: 1,
+                          ),
+                          itemCount: items.length,
+                          itemBuilder: (context, index) {
+                            final item = items[index];
+                            final globalIndex = _images.indexOf(item);
+                            return GestureDetector(
+                              onTap: () => _openGallery(globalIndex),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withAlpha(25),
+                                        blurRadius: 4,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      item.isFile
+                                          ? Image.file(
+                                              item.image as File,
+                                              fit: BoxFit.cover,
+                                            )
+                                          : AssetEntityImage(
+                                              item.image as AssetEntity,
+                                              isOriginal: false,
+                                              thumbnailSize:
+                                                  const ThumbnailSize.square(200),
+                                              fit: BoxFit.cover,
+                                            ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    );
+                  }).toList();
+                }(),
+              ),
             ),
-          ),
         ],
       ),
     );
   }
 }
 
-class _GalleryPreviewPage extends StatelessWidget {
+class _GalleryPreviewPage extends StatefulWidget {
   const _GalleryPreviewPage({
     required this.images,
     required this.initialIndex,
@@ -347,15 +560,48 @@ class _GalleryPreviewPage extends StatelessWidget {
   final int initialIndex;
 
   @override
+  State<_GalleryPreviewPage> createState() => _GalleryPreviewPageState();
+}
+
+class _GalleryPreviewPageState extends State<_GalleryPreviewPage> {
+  late PageController _pageController;
+  late int _currentIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(),
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: Text(
+          '${_currentIndex + 1} / ${widget.images.length}',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        elevation: 2,
+      ),
       body: PhotoViewGallery.builder(
-        pageController: PageController(initialPage: initialIndex),
-        itemCount: images.length,
+        pageController: _pageController,
+        itemCount: widget.images.length,
         scrollPhysics: const BouncingScrollPhysics(),
+        onPageChanged: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
         builder: (context, index) {
-          final item = images[index];
+          final item = widget.images[index];
           return PhotoViewGalleryPageOptions(
             imageProvider: item.isFile
                 ? FileImage(item.image as File)
@@ -367,8 +613,12 @@ class _GalleryPreviewPage extends StatelessWidget {
             maxScale: PhotoViewComputedScale.covered * 3,
           );
         },
-        loadingBuilder: (context, event) => const Center(
-          child: CircularProgressIndicator(),
+        loadingBuilder: (context, event) => Center(
+          child: CircularProgressIndicator(
+            value: event == null
+                ? 0
+                : event.cumulativeBytesLoaded / (event.expectedTotalBytes ?? 1),
+          ),
         ),
         backgroundDecoration: const BoxDecoration(
           color: Colors.black,

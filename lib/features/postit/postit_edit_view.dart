@@ -98,7 +98,11 @@ class _PostItEditViewState extends State<PostItEditView> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Post-it Editor'),
+        title: const Text(
+          'Post-it Editor',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        elevation: 2,
         actions: [
           IconButton(
             onPressed: () {
