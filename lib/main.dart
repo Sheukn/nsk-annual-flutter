@@ -4,7 +4,8 @@ import 'package:flutter_pa_snk/features/board/board_list_view.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'dart:io';
 import 'features/gallery/gallery_view.dart';
-import 'services/sync_service.dart';
+import 'services/connection_service.dart';
+import 'services/photo_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -42,26 +43,29 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   int _selectedIndex = 0;
-  late SyncService _syncService;
+  late ConnectionService _connectionService;
+  late PhotoService _photoService;
 
   @override
   void initState() {
     super.initState();
-    _syncService = SyncService();
-    _syncService.checkServerHealth(); // Check once at startup
-    _syncService.startAutoSync(); // Start background sync attempts
+    _connectionService = ConnectionService();
+    _photoService = PhotoService();
+    _connectionService.checkServerHealth(); // Check once at startup
+    _connectionService.startHealthCheck(); // Start periodic health checks
   }
 
   @override
   void dispose() {
-    _syncService.dispose();
+    _connectionService.dispose();
+    _photoService.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final List<Widget> widgetOptions = <Widget>[
-      GalleryView(syncService: _syncService),
+      GalleryView(photoService: _photoService),
       const BoardListView(),
     ];
 
@@ -74,11 +78,11 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
           ),
           ValueListenableBuilder<bool>(
-            valueListenable: _syncService.connectionStatus,
+            valueListenable: _connectionService.connectionStatus,
             builder: (context, isConnected, child) {
               if (!isConnected) {
                 return GestureDetector(
-                  onTap: () => _syncService.reconnect(),
+                  onTap: () => _connectionService.reconnect(),
                   child: Container(
                     color: Colors.red[400],
                     padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),

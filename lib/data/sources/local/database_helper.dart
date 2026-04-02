@@ -2,15 +2,17 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_pa_snk/models/board_item.dart';
+import 'package:uuid/uuid.dart';
 import 'dart:io';
 import 'dart:ui' as ui;
 
 class SavedBoard {
-  final int id;
+  final String id;
   final String name;
   final double height;
   final double width;
   final String? previewPath;
+  final String? previewSrc;
   final String? lastUpdate;
 
   SavedBoard({
@@ -19,6 +21,7 @@ class SavedBoard {
     required this.height,
     required this.width,
     this.previewPath,
+    this.previewSrc,
     this.lastUpdate,
   });
 }
@@ -44,7 +47,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 1,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
       },
@@ -52,11 +55,12 @@ class DatabaseService {
         // Table Board
         await db.execute('''
           CREATE TABLE Board (
-            id INTEGER PRIMARY KEY,
+            id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
             height REAL NOT NULL,
             width REAL NOT NULL,
             preview_path TEXT,
+            preview_src TEXT,
             last_update TEXT,
             created_at TEXT
           )
@@ -65,7 +69,7 @@ class DatabaseService {
         // Table Board_Asset liée à Board
         await db.execute('''
           CREATE TABLE Board_Asset (
-            board_id INTEGER NOT NULL,
+            board_id TEXT NOT NULL,
             asset_name TEXT NOT NULL,
             scale REAL,
             rotation REAL,
@@ -77,33 +81,27 @@ class DatabaseService {
           )
         ''');
       },
-      onUpgrade: (db, oldVersion, newVersion) async {
-        if (oldVersion < 2) {
-          try {
-            await db.execute('ALTER TABLE Board ADD COLUMN preview_path TEXT');
-          } catch (_) {
-            // Ignore if column already exists.
-          }
-        }
-      },
     );
   }
 
-  Future<int> createBoard({
+  Future<String> createBoard({
     required String name,
     required double height,
     required double width,
   }) async {
     final db = await database;
     final now = DateTime.now().toIso8601String();
+    final boardUuid = const Uuid().v4();
 
-    return db.insert('Board', {
+    await db.insert('Board', {
+      'id': boardUuid,
       'name': name,
       'height': height,
       'width': width,
       'last_update': now,
       'created_at': now,
     });
+    return boardUuid;
   }
 
   Future<List<SavedBoard>> getBoards() async {
@@ -113,18 +111,19 @@ class DatabaseService {
     return rows
         .map(
           (row) => SavedBoard(
-            id: row['id'] as int,
+            id: row['id'] as String,
             name: row['name'] as String,
             height: (row['height'] as num).toDouble(),
             width: (row['width'] as num).toDouble(),
             previewPath: row['preview_path'] as String?,
+            previewSrc: row['preview_src'] as String?,
             lastUpdate: row['last_update'] as String?,
           ),
         )
         .toList();
   }
 
-  Future<List<BoardItem>> loadBoardItems(int boardId) async {
+  Future<List<BoardItem>> loadBoardItems(String boardId) async {
     final db = await database;
     final rows = await db.query(
       'Board_Asset',
@@ -182,7 +181,7 @@ class DatabaseService {
   }
 
   Future<void> saveBoard({
-    required int boardId,
+    required String boardId,
     required String name,
     required double height,
     required double width,
@@ -255,7 +254,7 @@ class DatabaseService {
   /// Inserts a single Board_Asset row immediately (used when adding an image
   /// to the board so the link is persisted without a full save).
   Future<void> insertBoardAsset({
-    required int boardId,
+    required String boardId,
     required String assetName,
     required double x,
     required double y,
@@ -278,7 +277,7 @@ class DatabaseService {
 
   /// Updates the src (file path) of an existing Board_Asset row.
   Future<void> updateBoardAssetSrc({
-    required int boardId,
+    required String boardId,
     required String assetName,
     required String src,
   }) async {
@@ -292,7 +291,7 @@ class DatabaseService {
   }
 
   /// Deletes a board and all its associated assets.
-  Future<void> deleteBoard(int boardId) async {
+  Future<void> deleteBoard(String boardId) async {
     final db = await database;
     await db.delete(
       'Board',
@@ -301,7 +300,7 @@ class DatabaseService {
     );
   }
 
-  Future<void> updateBoardName(int boardId, String newName) async {
+  Future<void> updateBoardName(String boardId, String newName) async {
     final db = await database;
     final now = DateTime.now().toIso8601String();
     
@@ -313,6 +312,41 @@ class DatabaseService {
       },
       where: 'id = ?',
       whereArgs: [boardId],
+    );
+  }
+
+  Future<void> updateBoardPreviewSrc({
+    required String boardId,
+    required String previewSrc,
+  }) async {
+    final db = await database;
+    await db.update(
+      'Board',
+      {'preview_src': previewSrc},
+      where: 'id = ?',
+      whereArgs: [boardId],
+    );
+  }
+
+  /// Updates position, rotation, and size of a board asset.
+  Future<void> updateBoardAssetPosition({
+    required String boardId,
+    required String assetName,
+    required double x,
+    required double y,
+    required double rotation,
+  }) async {
+    final db = await database;
+    await db.update(
+      'Board_Asset',
+      {
+        'x_position': x,
+        'y_position': y,
+        'rotation': rotation,
+        'last_update': DateTime.now().toIso8601String(),
+      },
+      where: 'board_id = ? AND asset_name = ?',
+      whereArgs: [boardId, assetName],
     );
   }
 } 

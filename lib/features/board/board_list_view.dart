@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_pa_snk/data/sources/local/database_helper.dart';
 import 'package:flutter_pa_snk/features/board/board_view.dart';
+import 'package:flutter_pa_snk/services/board_service.dart';
 
 class BoardListView extends StatefulWidget {
   const BoardListView({super.key});
@@ -16,6 +17,7 @@ class _BoardListViewState extends State<BoardListView> {
   static const double _boardHeight = 1000;
 
   final DatabaseService _databaseService = DatabaseService();
+  final BoardService _networkService = BoardService();
   late Future<List<SavedBoard>> _boardsFuture;
 
   @override
@@ -79,7 +81,10 @@ class _BoardListViewState extends State<BoardListView> {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => BoardView(boardId: boardId, boardName: boardName),
+        builder: (_) => BoardView(
+          boardId: boardId,
+          boardName: boardName,
+        ),
       ),
     );
 
@@ -90,7 +95,10 @@ class _BoardListViewState extends State<BoardListView> {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => BoardView(boardId: board.id, boardName: board.name),
+        builder: (_) => BoardView(
+          boardId: board.id,
+          boardName: board.name,
+        ),
       ),
     );
 
@@ -198,12 +206,173 @@ class _BoardListViewState extends State<BoardListView> {
                   _deleteBoard(board);
                 },
               ),
+              ListTile(
+                leading: const Icon(Icons.cloud_upload, color: Colors.green),
+                title: const Text('Upload to Server', style: TextStyle(color: Colors.green)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _uploadBoardToServer(board);
+                },
+              ),
               const SizedBox(height: 8),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _uploadBoardToServer(SavedBoard board) async {
+    try {
+      // Load board items
+      final items = await _databaseService.loadBoardItems(board.id);
+
+      if (!mounted) return;
+
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          content: Row(
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(width: 16),
+              const Text('Uploading board...'),
+            ],
+          ),
+        ),
+      );
+
+      // Upload the board using the board ID (UUID)
+      await _networkService.uploadBoard(
+        boardId: board.id,
+        name: board.name,
+        height: board.height,
+        width: board.width,
+        items: items,
+        previewSrc: board.previewSrc,
+      );
+
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Board uploaded successfully!')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to upload board: $e')),
+      );
+    }
+  }
+
+  Future<void> _fetchBoardsFromServer() async {
+    try {
+      if (!mounted) return;
+
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          content: Row(
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(width: 16),
+              const Text('Fetching boards...'),
+            ],
+          ),
+        ),
+      );
+
+      // Fetch all boards from server
+      final serverBoards = await _networkService.fetchAllBoards();
+
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      // Sync with local database
+      int syncedCount = 0;
+      for (final boardDto in serverBoards) {
+        // Try to find matching local board by ID (both are now UUIDs)
+        final localBoards = await _databaseService.getBoards();
+        SavedBoard? matchingBoard;
+
+        for (final localBoard in localBoards) {
+          if (localBoard.id == boardDto.id) {
+            matchingBoard = localBoard;
+            break;
+          }
+        }
+
+        if (matchingBoard != null) {
+          // Update existing board metadata
+          await _databaseService.updateBoardName(matchingBoard.id, boardDto.name);
+          
+          // Update preview if provided
+          if (boardDto.previewSrc != null) {
+            await _databaseService.updateBoardPreviewSrc(
+              boardId: matchingBoard.id,
+              previewSrc: boardDto.previewSrc!,
+            );
+          }
+          syncedCount++;
+        } else {
+          // Create new board from server with same UUID as server
+          final newBoardId = await _databaseService.createBoard(
+            name: boardDto.name,
+            height: boardDto.height,
+            width: boardDto.width,
+          );
+
+          // Update preview if provided
+          if (boardDto.previewSrc != null) {
+            await _databaseService.updateBoardPreviewSrc(
+              boardId: newBoardId,
+              previewSrc: boardDto.previewSrc!,
+            );
+          }
+
+          // Save assets from server
+          for (final assetDto in boardDto.assets) {
+            await _databaseService.insertBoardAsset(
+              boardId: newBoardId,
+              assetName: assetDto.assetName,
+              x: assetDto.xPosition,
+              y: assetDto.yPosition,
+              rotation: assetDto.rotation,
+              src: assetDto.src,
+            );
+          }
+
+          syncedCount++;
+        }
+      }
+
+      if (!mounted) return;
+
+      // Refresh the board list
+      await _refreshBoards();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Synced $syncedCount board(s) from server')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      
+      // Try to close loading dialog safely
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to fetch boards: $e')),
+      );
+    }
   }
 
   Widget _buildPreview(SavedBoard board) {
@@ -240,6 +409,13 @@ class _BoardListViewState extends State<BoardListView> {
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         elevation: 2,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.cloud_download),
+            tooltip: 'Sync from Server',
+            onPressed: _fetchBoardsFromServer,
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: _refreshBoards,

@@ -1,25 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
-import 'package:path_provider/path_provider.dart';
 import 'dart:io';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:flutter_pa_snk/services/sync_service.dart';
-import 'package:flutter_pa_snk/core/config/api_config.dart';
+import 'package:flutter_pa_snk/services/photo_service.dart';
 import 'package:flutter_pa_snk/features/gallery/models/gallery_models.dart';
 import 'package:flutter_pa_snk/features/gallery/pages/gallery_preview_page.dart';
 
 class GalleryView extends StatefulWidget {
-  final SyncService? syncService;
+  final PhotoService? photoService;
 
-  const GalleryView({super.key, this.syncService});
+  const GalleryView({super.key, this.photoService});
 
   @override
   State<GalleryView> createState() => _GalleryViewState();
 }
 
 class _GalleryViewState extends State<GalleryView> {
+  static const List<String> _imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+  static const List<String> _videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.flv', '.wmv', '.webm', '.3gp', '.m4v'];
+
   List<GalleryItem> _images = [];
   List<Album> _albums = [];
   Album? _selectedAlbum;
@@ -38,64 +37,69 @@ class _GalleryViewState extends State<GalleryView> {
 
   Future<void> _init() async {
     final PermissionState ps = await PhotoManager.requestPermissionExtend();
-    if (ps.isAuth) {
-      await _fetchAlbums();
-      if (_albums.isNotEmpty) {
-        final deviceAlbumIndex = _albums.indexWhere((album) => !album.isServerAlbum());
-        final albumToLoad = deviceAlbumIndex > -1 ? _albums[deviceAlbumIndex] : _albums.first;
-        await _fetchImages(albumToLoad);
-      }
-    } else {
+    if (!ps.isAuth) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Permission denied to access gallery')),
       );
+      return;
+    }
+
+    await _fetchAlbums();
+    if (_albums.isNotEmpty) {
+      final firstDeviceAlbum = _albums.firstWhere(
+        (album) => !album.isServerAlbum(),
+        orElse: () => _albums.first,
+      );
+      await _fetchImages(firstDeviceAlbum);
     }
   }
 
   Future<void> _fetchAlbums() async {
-    List<Album> albums = [Album(name: 'Server', assetPath: null)];
-    List<AssetPathEntity> deviceAlbums = await PhotoManager.getAssetPathList(
-      type: RequestType.all,
-    );
-    albums.addAll(
-      deviceAlbums.map((album) => Album(name: album.name, assetPath: album)),
-    );
+    final deviceAlbums = await PhotoManager.getAssetPathList(type: RequestType.all);
+    final albums = [
+      Album(name: 'Server', assetPath: null),
+      ...deviceAlbums.map((a) => Album(name: a.name, assetPath: a)),
+    ];
     setState(() => _albums = albums);
   }
 
   Future<void> _fetchImages(Album album) async {
-    List<GalleryItem> images;
-
-    if (album.isServerAlbum()) {
-      final serverDir = await _getServerDirectory();
-      final serverPhotoUrls = await _getServerPhotoList();
-      final serverFileNames = serverPhotoUrls.map((url) => url.split('/').last).toSet();
-
-      images = await _loadImagesFromDirectory(serverDir);
-
-      for (final item in images) {
-        if (item.isFile) {
+    List<GalleryItem> images = [];
+    try {
+      if (album.isServerAlbum()) {
+        final serverDir = await widget.photoService!.getServerDirectory();
+        final serverPhotoUrls = await widget.photoService!.getServerPhotoList();
+        final serverFileNames = serverPhotoUrls.map((url) => url.split('/').last).toSet();
+        
+        // Delete stale files from cache
+        final cachedFiles = await _loadImagesFromDirectory(serverDir);
+        for (final item in cachedFiles.where((i) => i.isFile)) {
           final fileName = (item.image as File).path.split('/').last;
           if (!serverFileNames.contains(fileName)) {
-            try {
-              await (item.image as File).delete();
-            } catch (e) {
-              debugPrint('[Gallery] Failed to delete stale file: $e');
-            }
+            await (item.image as File).delete().catchError((_) {});
           }
         }
+        
+        // Download new photos from server
+        if (widget.photoService != null) {
+          for (final url in serverPhotoUrls) {
+            await widget.photoService!.downloadPhoto(url, serverDir);
+          }
+        }
+        
+        // Load all photos from cache
+        images = await _loadImagesFromDirectory(serverDir);
+      } else {
+        final assets = await album.assetPath!.getAssetListPaged(page: 0, size: 100);
+        images = assets
+            .map((a) => GalleryItem(name: a.title ?? 'Media', image: a, isFile: false, createDate: a.createDateTime))
+            .toList();
       }
-
-      images = await _loadImagesFromDirectory(serverDir);
-    } else {
-      final assetImages = await album.assetPath!.getAssetListPaged(page: 0, size: 100);
-      images = assetImages.map((asset) => GalleryItem(
-            name: asset.title ?? 'Media',
-            image: asset,
-            isFile: false,
-            createDate: asset.createDateTime,
-          )).toList();
+    } catch (_) {
+      if (album.isServerAlbum() && widget.photoService != null) {
+        images = await _loadImagesFromDirectory(await widget.photoService!.getServerDirectory());
+      }
     }
 
     setState(() {
@@ -104,74 +108,49 @@ class _GalleryViewState extends State<GalleryView> {
     });
   }
 
-  Future<List<String>> _getServerPhotoList() async {
-    try {
-      final response = await http.get(Uri.parse(ApiConfig.photosList)).timeout(const Duration(seconds: 10));
-      if (response.statusCode == 200) {
-        final List<dynamic> jsonList = jsonDecode(response.body);
-        return jsonList.map((item) {
-          String url = item['url'] as String;
-          return url.replaceFirst('http://localhost:8081', 'http://192.168.0.29:8081');
-        }).toList();
-      }
-    } catch (e) {
-      debugPrint('[Gallery] Error fetching server photo list: $e');
-    }
-    return [];
-  }
-
-  Future<Directory> _getServerDirectory() async {
-    final appDir = await getApplicationDocumentsDirectory();
-    final serverDir = Directory('${appDir.path}/server');
-    if (!await serverDir.exists()) {
-      await serverDir.create(recursive: true);
-    }
-    return serverDir;
-  }
-
   Future<List<GalleryItem>> _loadImagesFromDirectory(Directory dir) async {
-    final files = dir.listSync();
-    final mediaFiles = files.where((file) => file is File && _isMediaFile(file.path)).cast<File>().toList();
-
-    return mediaFiles.map((file) => GalleryItem(
-          name: file.path.split('/').last,
-          image: file,
-          isFile: true,
-          createDate: file.lastModifiedSync(),
-        )).toList();
+    try {
+      if (!await dir.exists()) return [];
+      
+      return dir
+          .listSync()
+          .whereType<File>()
+          .where((f) => _isMediaFile(f.path))
+          .map((f) => GalleryItem(
+            name: f.path.split('/').last,
+            image: f,
+            isFile: true,
+            createDate: f.lastModifiedSync(),
+          ))
+          .toList();
+    } catch (_) {
+      return [];
+    }
   }
 
   bool _isMediaFile(String path) {
     final ext = path.toLowerCase();
-    final isImage = ext.endsWith('.jpg') || ext.endsWith('.jpeg') || ext.endsWith('.png') || 
-                    ext.endsWith('.gif') || ext.endsWith('.webp');
-    final isVideo = ext.endsWith('.mp4') || ext.endsWith('.mov') || ext.endsWith('.avi') || 
-                    ext.endsWith('.mkv') || ext.endsWith('.flv') || ext.endsWith('.wmv') || 
-                    ext.endsWith('.webm') || ext.endsWith('.3gp') || ext.endsWith('.m4v');
-    return isImage || isVideo;
+    return _imageExtensions.any(ext.endsWith) || _videoExtensions.any(ext.endsWith);
   }
 
   bool _isVideoFile(GalleryItem item) {
-    final path = item.isFile ? (item.image as File).path : '';
-    final ext = path.toLowerCase();
-    return ext.endsWith('.mp4') || ext.endsWith('.mov') || ext.endsWith('.avi') || 
-           ext.endsWith('.mkv') || ext.endsWith('.flv') || ext.endsWith('.wmv') || 
-           ext.endsWith('.webm') || ext.endsWith('.3gp') || ext.endsWith('.m4v');
+    final ext = item.isFile ? (item.image as File).path.toLowerCase() : '';
+    return _videoExtensions.any(ext.endsWith);
   }
 
   @override
   void initState() {
     super.initState();
     _init();
-    if (widget.syncService != null) {
-      widget.syncService!.syncCounter.addListener(_onSyncComplete);
+    if (widget.photoService != null) {
+      widget.photoService!.syncCounter.addListener(_onSyncComplete);
     }
   }
 
   @override
   void dispose() {
-    if (widget.syncService != null) {
-      widget.syncService!.syncCounter.removeListener(_onSyncComplete);
+    if (widget.photoService != null) {
+      widget.photoService!.syncCounter.removeListener(_onSyncComplete);
     }
     super.dispose();
   }
@@ -183,79 +162,58 @@ class _GalleryViewState extends State<GalleryView> {
   }
 
   Future<void> _uploadCurrentAlbum() async {
-    if (widget.syncService == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sync service not available')));
+    if (widget.photoService == null || _images.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.photoService == null ? 'Photo service not available' : 'No photos to upload')),
+      );
       return;
     }
 
-    if (!widget.syncService!.connectionStatus.value) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Server not connected')));
-      return;
-    }
-
-    if (_images.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No photos to upload')));
-      return;
-    }
-
-    final assetsToUpload = _images.where((item) => !item.isFile).map((item) => item.image as AssetEntity).toList();
-
-    if (assetsToUpload.isEmpty) {
+    final assets = _images.where((i) => !i.isFile).map((i) => i.image as AssetEntity).toList();
+    if (assets.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No device photos to upload')));
       return;
     }
 
-    final newAssetsCount = await widget.syncService!.countNewAssets(assetsToUpload);
-
-    if (newAssetsCount == 0) {
+    final count = await widget.photoService!.countNewAssets(assets);
+    if (count == 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No need to upload, all already synced'), backgroundColor: Colors.blue),
+        const SnackBar(content: Text('All photos already synced'), backgroundColor: Colors.blue),
       );
       return;
     }
 
-    final success = await widget.syncService!.uploadPhotos(assetsToUpload);
-
+    final success = await widget.photoService!.uploadPhotos(assets);
     if (!mounted) return;
-
-    if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Uploaded $newAssetsCount photos successfully'), backgroundColor: Colors.green),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Upload failed'), backgroundColor: Colors.red),
-      );
-    }
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(success ? 'Uploaded $count photos' : 'Upload failed'),
+        backgroundColor: success ? Colors.green : Colors.red,
+      ),
+    );
   }
 
   Map<String, List<GalleryItem>> _groupImagesByMonthDay() {
-    final groupedMap = <String, List<GalleryItem>>{};
+    final groups = <String, List<GalleryItem>>{};
     for (final item in _images) {
-      final date = item.createDate;
+      final d = item.createDate;
       final key = _groupByMonth
-          ? '${date.year}-${date.month.toString().padLeft(2, '0')}'
-          : '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-      if (!groupedMap.containsKey(key)) {
-        groupedMap[key] = [];
-      }
-      groupedMap[key]!.add(item);
+          ? '${d.year}-${d.month.toString().padLeft(2, '0')}'
+          : '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      (groups[key] ??= []).add(item);
     }
-    return groupedMap;
+    return groups;
   }
 
   String _formatDateHeader(String dateStr) {
     final parts = dateStr.split('-');
-    final year = int.parse(parts[0]);
-    final month = int.parse(parts[1]);
-    final monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June',
-                        'July', 'August', 'September', 'October', 'November', 'December'];
-    if (_groupByMonth) {
-      return '${monthNames[month]} $year';
-    } else {
-      final day = int.parse(parts[2]);
-      return '${monthNames[month]} $day, $year';
-    }
+    final monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    final month = monthNames[int.parse(parts[1]) - 1];
+    final year = parts[0];
+    
+    if (_groupByMonth) return '$month $year';
+    return '$month ${parts[2]}, $year';
   }
 
   @override
@@ -358,7 +316,10 @@ class _GalleryViewState extends State<GalleryView> {
                     const SizedBox(height: 16),
                     Text('No photos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500, color: Colors.grey[600])),
                     const SizedBox(height: 8),
-                    Text('Photos will appear here', style: TextStyle(fontSize: 14, color: Colors.grey[500])),
+                    if (_selectedAlbum?.isServerAlbum() ?? false)
+                      Text('Check server connection at 192.168.0.29:8081', style: TextStyle(fontSize: 12, color: Colors.orange[700]))
+                    else
+                      Text('Photos will appear here', style: TextStyle(fontSize: 14, color: Colors.grey[500])),
                   ],
                 ),
               ),

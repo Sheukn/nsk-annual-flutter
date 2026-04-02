@@ -9,13 +9,14 @@ import 'package:flutter_pa_snk/models/board_item.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
+import 'package:flutter_pa_snk/services/board_service.dart';
 import 'widgets/board_item_widget.dart';
 import 'widgets/control_sliders.dart';
 import 'widgets/board_action_menu.dart';
 import 'package:uuid/uuid.dart';
 
 class BoardView extends StatefulWidget {
-  final int boardId;
+  final String boardId; // UUID
   final String boardName;
 
   const BoardView({
@@ -37,6 +38,7 @@ class _BoardViewState extends State<BoardView> {
   final List<BoardItem> _items = [];
   final List<BoardItem> _selectedItem = [];
   final DatabaseService _databaseService = DatabaseService();
+  final BoardService _networkService = BoardService();
 
   BoardItem? get activeItem =>
       _selectedItem.length == 1 ? _selectedItem.first : null;
@@ -105,6 +107,17 @@ class _BoardViewState extends State<BoardView> {
               onPressed: _saveBoard,
             ),
           ),
+          Container(
+            margin: const EdgeInsets.only(right: 8),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade400,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.cloud_upload, color: Colors.white),
+              onPressed: _uploadBoard,
+            ),
+          ),
         ],
       ),
       body: Stack(
@@ -165,8 +178,16 @@ class _BoardViewState extends State<BoardView> {
           if (_selectedItem.length == 1 && activeItem != null) ...[
             RotationSlider(
               rotation: activeItem!.rotation,
-              onChanged:
-                  (value) => setState(() => activeItem!.rotation = value),
+              onChanged: (value) async {
+                setState(() => activeItem!.rotation = value);
+                await _databaseService.updateBoardAssetPosition(
+                  boardId: widget.boardId,
+                  assetName: activeItem!.id,
+                  x: activeItem!.position.x,
+                  y: activeItem!.position.y,
+                  rotation: value,
+                );
+              },
             ),
             SizeSlider(
               width: activeItem!.size.width,
@@ -251,6 +272,14 @@ class _BoardViewState extends State<BoardView> {
       item.position.x += details.focalPointDelta.dx;
       item.position.y += details.focalPointDelta.dy;
     });
+    // Save position to database
+    _databaseService.updateBoardAssetPosition(
+      boardId: widget.boardId,
+      assetName: item.id,
+      x: item.position.x,
+      y: item.position.y,
+      rotation: item.rotation,
+    );
   }
   final _uuid = const Uuid();
 
@@ -555,6 +584,54 @@ class _BoardViewState extends State<BoardView> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to save board locally: $e')),
+      );
+    }
+  }
+
+  Future<void> _uploadBoard() async {
+    try {
+      if (!mounted) return;
+      
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          content: Row(
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(width: 16),
+              const Text('Uploading board...'),
+            ],
+          ),
+        ),
+      );
+
+      // Capture the preview path
+      final previewPath = await _captureBoardPreviewPath();
+
+      // Upload the board using the UUID (boardId) with preview path
+      await _networkService.uploadBoard(
+        boardId: widget.boardId,
+        name: widget.boardName,
+        height: _boardHeight,
+        width: _boardWidth,
+        items: _items,
+        previewSrc: previewPath,
+      );
+
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Board uploaded successfully!')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to upload board: $e')),
       );
     }
   }

@@ -1,3 +1,11 @@
+/// DEPRECATED: This service has been split into:
+/// - [ConnectionService] for server health checks
+/// - [PhotoService] for photo uploads and downloads
+/// 
+/// Use those services instead. This file is kept for reference only.
+/// 
+/// TODO: Remove this file once all code is migrated.
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -7,6 +15,7 @@ import 'package:photo_manager/photo_manager.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_pa_snk/core/config/api_config.dart';
 
+@Deprecated('Use ConnectionService and PhotoService instead')
 class SyncService {
   static const String _healthEndpoint = ApiConfig.syncHealth;
   static const String _photosEndpoint = ApiConfig.photosList;

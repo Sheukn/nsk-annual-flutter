@@ -8,4 +8,7 @@ class ApiConfig {
   // Photo endpoints
   static const String photosList = '$baseUrl/photos';
   static const String photosBatch = '$baseUrl/photos/batch';
+  
+  // Board endpoints
+  static const String boards = '$baseUrl/boards';
 }
