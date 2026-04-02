@@ -43,7 +43,8 @@ dependencies:
   path_provider: ^2.1.5
   # Gestion de l'état (State Management)
   flutter_riverpod: any
-
+  http: any
+  shared_preferences: any
   # Utilitaires pour le Canvas
   vector_math: any
   matrix4_transform: any

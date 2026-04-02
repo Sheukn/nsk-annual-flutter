@@ -4,6 +4,7 @@ import 'package:flutter_pa_snk/features/board/board_list_view.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'dart:io';
 import 'features/gallery/gallery_view.dart';
+import 'services/sync_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,11 +41,26 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   int _selectedIndex = 0;
+  late SyncService _syncService;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncService = SyncService();
+    _syncService.checkServerHealth(); // Check once at startup
+    _syncService.startAutoSync(); // Start background sync attempts
+  }
+
+  @override
+  void dispose() {
+    _syncService.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final List<Widget> widgetOptions = <Widget>[
-      const GalleryView(),
+      GalleryView(syncService: _syncService),
       const BoardListView(),
     ];
 
@@ -53,8 +69,41 @@ class _MyHomePageState extends State<MyHomePage> {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         title: Text(widget.title),
       ),
-      body: Center(
-        child: widgetOptions.elementAt(_selectedIndex),
+      body: Column(
+        children: [
+          ValueListenableBuilder<bool>(
+            valueListenable: _syncService.connectionStatus,
+            builder: (context, isConnected, child) {
+              if (!isConnected) {
+                return GestureDetector(
+                  onTap: () => _syncService.reconnect(),
+                  child: Container(
+                    color: Colors.red[400],
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.warning, color: Colors.white),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Text(
+                            'No server connection - Tap to retry',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
+          Expanded(
+            child: Center(
+              child: widgetOptions.elementAt(_selectedIndex),
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
