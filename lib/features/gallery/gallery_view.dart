@@ -69,6 +69,7 @@ class _GalleryViewState extends State<GalleryView> {
     try {
       if (album.isServerAlbum()) {
         final serverDir = await widget.photoService!.getServerDirectory();
+        
         final serverPhotoUrls = await widget.photoService!.getServerPhotoList();
         final serverFileNames = serverPhotoUrls.map((url) => url.split('/').last).toSet();
         
@@ -77,12 +78,12 @@ class _GalleryViewState extends State<GalleryView> {
         for (final item in cachedFiles.where((i) => i.isFile)) {
           final fileName = (item.image as File).path.split('/').last;
           if (!serverFileNames.contains(fileName)) {
-            await (item.image as File).delete().catchError((_) {});
+            await (item.image as File).delete().catchError((_) => item.image as File);
           }
         }
         
-        // Download new photos from server
-        if (widget.photoService != null) {
+        // Download new photos from server ONLY if server album is still selected
+        if (widget.photoService != null && _selectedAlbum?.isServerAlbum() == true) {
           for (final url in serverPhotoUrls) {
             await widget.photoService!.downloadPhoto(url, serverDir);
           }
@@ -90,13 +91,13 @@ class _GalleryViewState extends State<GalleryView> {
         
         // Load all photos from cache
         images = await _loadImagesFromDirectory(serverDir);
-      } else {
         final assets = await album.assetPath!.getAssetListPaged(page: 0, size: 100);
         images = assets
             .map((a) => GalleryItem(name: a.title ?? 'Media', image: a, isFile: false, createDate: a.createDateTime))
             .toList();
       }
-    } catch (_) {
+    } catch (e) {
+      print('[GalleryView] ERROR fetching images: $e');
       if (album.isServerAlbum() && widget.photoService != null) {
         images = await _loadImagesFromDirectory(await widget.photoService!.getServerDirectory());
       }
