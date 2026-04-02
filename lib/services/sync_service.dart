@@ -54,28 +54,57 @@ class SyncService {
   }
 
   Future<void> reconnect() async {
+    debugPrint('[SyncService] Reconnecting...');
     final response = await http
         .get(Uri.parse(_healthEndpoint))
         .timeout(_requestTimeout);
     
+    debugPrint('[SyncService] Health check status: ${response.statusCode}');
     if (response.statusCode == 200) {
       connectionStatus.value = true;
+      debugPrint('[SyncService] Connection successful, clearing cache...');
+      // Clear cache and resync on reconnect
+      await _clearCache();
+      debugPrint('[SyncService] Cache cleared, starting sync...');
+      await syncPhotos();
     } else {
       connectionStatus.value = false;
+      debugPrint('[SyncService] Connection failed: ${response.statusCode}');
+    }
+  }
+
+  /// Clear all cached photos from local storage
+  Future<void> _clearCache() async {
+    try {
+      final serverDir = await _getServerDirectory();
+      if (await serverDir.exists()) {
+        debugPrint('[SyncService] Clearing cache directory: ${serverDir.path}');
+        serverDir.deleteSync(recursive: true);
+        await serverDir.create(recursive: true);
+        debugPrint('[SyncService] Cache cleared successfully');
+      }
+    } catch (e) {
+      debugPrint('[SyncService] Error clearing cache: $e');
+      // Continue even if cache clearing fails
     }
   }
 
   Future<void> syncPhotos() async {
     if (isSyncing.value) {
+      debugPrint('[SyncService] Sync already in progress, skipping...');
       return;
     }
 
+    debugPrint('[SyncService] Starting photo sync...');
     isSyncing.value = true;
 
     try {
       final response = await http
           .get(Uri.parse(_photosEndpoint))
           .timeout(_requestTimeout);
+
+      debugPrint('[SyncService] API response status: ${response.statusCode}');
+      debugPrint('[SyncService] API response body: ${response.body}');
 
       if (response.statusCode == 200) {
         final List<dynamic> jsonList = jsonDecode(response.body);
@@ -86,30 +115,45 @@ class SyncService {
             })
             .toList();
 
+        debugPrint('[SyncService] Found ${photoUrls.length} photos on server');
+        debugPrint('[SyncService] Photo URLs: $photoUrls');
+
         if (photoUrls.isEmpty) {
+          debugPrint('[SyncService] No photos to download');
           isSyncing.value = false;
           return;
         }
 
         final serverDir = await _getServerDirectory();
+        debugPrint('[SyncService] Downloading photos to: ${serverDir.path}');
+        
+        int downloadedCount = 0;
         for (final url in photoUrls) {
           try {
             await _downloadPhoto(url, serverDir);
+            downloadedCount++;
+            debugPrint('[SyncService] Downloaded: $url');
           } catch (e) {
+            debugPrint('[SyncService] Failed to download $url: $e');
             continue;
           }
         }
+        
+        debugPrint('[SyncService] Downloaded $downloadedCount/${photoUrls.length} photos');
         
         // Delete cached files that no longer exist on server
         await _cleanupStaleCache(photoUrls, serverDir);
         
         connectionStatus.value = true;
         syncCounter.value++;
+        debugPrint('[SyncService] Sync completed successfully');
       } else {
         connectionStatus.value = false;
+        debugPrint('[SyncService] API returned error: ${response.statusCode}');
       }
     } catch (e) {
       connectionStatus.value = false;
+      debugPrint('[SyncService] Sync error: $e');
     } finally {
       isSyncing.value = false;
     }
@@ -121,10 +165,12 @@ class SyncService {
 
     final file = File(filePath);
     
+    debugPrint('[SyncService] Downloading: $url to $filePath');
     final response = await http.get(Uri.parse(url)).timeout(_requestTimeout);
 
     if (response.statusCode == 200) {
       await file.writeAsBytes(response.bodyBytes);
+      debugPrint('[SyncService] Saved file: $filePath (${response.bodyBytes.length} bytes)');
     } else {
       throw Exception('Failed to download: ${response.statusCode}');
     }

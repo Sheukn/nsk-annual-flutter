@@ -68,6 +68,11 @@ class _MyHomePageState extends State<MyHomePage> {
     return Scaffold(
       body: Column(
         children: [
+          Expanded(
+            child: Center(
+              child: widgetOptions.elementAt(_selectedIndex),
+            ),
+          ),
           ValueListenableBuilder<bool>(
             valueListenable: _syncService.connectionStatus,
             builder: (context, isConnected, child) {
@@ -94,11 +99,6 @@ class _MyHomePageState extends State<MyHomePage> {
               }
               return const SizedBox.shrink();
             },
-          ),
-          Expanded(
-            child: Center(
-              child: widgetOptions.elementAt(_selectedIndex),
-            ),
           ),
         ],
       ),
