@@ -267,19 +267,16 @@ class _GalleryViewState extends State<GalleryView> {
         actions: [
           IconButton(
             icon: Icon(_groupByMonth ? Icons.calendar_month : Icons.calendar_today),
-            tooltip: _groupByMonth ? 'Group by day' : 'Group by month',
             onPressed: () => setState(() => _groupByMonth = !_groupByMonth),
           ),
           if (!(_selectedAlbum?.isServerAlbum() ?? false))
             IconButton(
               icon: const Icon(Icons.cloud_upload),
-              tooltip: 'Upload album',
               onPressed: _uploadCurrentAlbum,
             ),
           if (_selectedAlbum?.isServerAlbum() ?? false)
             IconButton(
               icon: const Icon(Icons.refresh),
-              tooltip: 'Refresh',
               onPressed: () => _fetchImages(_selectedAlbum!),
             ),
         ],

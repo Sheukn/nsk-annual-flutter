@@ -32,6 +32,7 @@ class _BoardViewState extends State<BoardView> {
   static const double _boardWidth = 1000;
   static const double _boardHeight = 1000;
   final GlobalKey _boardRepaintKey = GlobalKey();
+  late TransformationController _transformationController;
 
   final List<BoardItem> _items = [];
   final List<BoardItem> _selectedItem = [];
@@ -43,7 +44,40 @@ class _BoardViewState extends State<BoardView> {
   @override
   void initState() {
     super.initState();
+    _transformationController = TransformationController();
     _loadBoardItems();
+    // Center the board on first load
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _centerBoard();
+    });
+  }
+
+  @override
+  void dispose() {
+    _transformationController.dispose();
+    super.dispose();
+  }
+
+  void _centerBoard() {
+    final screenSize = MediaQuery.of(context).size;
+    final appBarHeight = AppBar().preferredSize.height;
+    final viewportWidth = screenSize.width;
+    final viewportHeight = screenSize.height - appBarHeight;
+
+    // Calculate scale to fit the board in the viewport
+    final scaleX = viewportWidth / _boardWidth;
+    final scaleY = viewportHeight / _boardHeight;
+    final scale = (scaleX < scaleY ? scaleX : scaleY) * 0.9; // 90% to leave margins
+
+    // Calculate translation to center the board
+    final boardScaledWidth = _boardWidth * scale;
+    final boardScaledHeight = _boardHeight * scale;
+    final translateX = (viewportWidth - boardScaledWidth) / 2;
+    final translateY = (viewportHeight - boardScaledHeight) / 2;
+
+    _transformationController.value = Matrix4.identity()
+      ..translate(translateX, translateY)
+      ..scale(scale);
   }
 
   @override
@@ -52,14 +86,24 @@ class _BoardViewState extends State<BoardView> {
       appBar: AppBar(
         title: Text(
           widget.boardName,
-          style: const TextStyle(fontWeight: FontWeight.bold),
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 24,
+            letterSpacing: 0.5,
+          ),
         ),
-        elevation: 2,
+        elevation: 8,
         actions: [
-          IconButton(
-            tooltip: 'Save board',
-            icon: const Icon(Icons.save),
-            onPressed: _saveBoard,
+          Container(
+            margin: const EdgeInsets.only(right: 8),
+            decoration: BoxDecoration(
+              color: Colors.green.shade400,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.save, color: Colors.white),
+              onPressed: _saveBoard,
+            ),
           ),
         ],
       ),
@@ -67,21 +111,32 @@ class _BoardViewState extends State<BoardView> {
         children: [
           InteractiveViewer(
             constrained: false,
+            transformationController: _transformationController,
             boundaryMargin: const EdgeInsets.all(500),
             minScale: 0.1,
             maxScale: 2.5,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap:
-                  () => {
-                    setState(() {
-                      _selectedItem.clear();
-                    }),
-                  },
+            child: Container(
+              color: Colors.transparent,
               child: RepaintBoundary(
                 key: _boardRepaintKey,
                 child: Container(
-                  color: const Color.fromARGB(255, 182, 168, 81),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        const Color(0xFFE8D4B8),
+                        const Color(0xFFF5E6D3),
+                      ],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withAlpha(60),
+                        blurRadius: 16,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
                   width: _boardWidth,
                   height: _boardHeight,
                   child: Stack(
@@ -106,7 +161,7 @@ class _BoardViewState extends State<BoardView> {
                 ),
               ),
             ),
-          ),
+            ),
           if (_selectedItem.length == 1 && activeItem != null) ...[
             RotationSlider(
               rotation: activeItem!.rotation,
@@ -129,19 +184,24 @@ class _BoardViewState extends State<BoardView> {
           Align(
             alignment: Alignment.bottomCenter,
             child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: BoardActionMenu(
-                selectedItems: _selectedItem,
-                onAddImage: _addImage,
-                onAddPostIt: _addPostIt,
-                onDelete: _deleteSelected,
-                onChangeColor: _changeColor,
-                onBringToFront: _bringToFront,
-                onSendToBack: _sendToBack,
-                onEdit:
-                    _selectedItem.length == 1
-                        ? (_selectedItem.first.isImage ? () => _pickGalleryImageForItem(_selectedItem.first) : _editPostIt)
-                        : null,
+              padding: const EdgeInsets.all(24.0),
+              child: IgnorePointer(
+                ignoring: false,
+                child: Material(
+                  color: Colors.transparent,
+                  child: BoardActionMenu(
+                    selectedItems: _selectedItem,
+                    onAddImage: _addImage,
+                    onAddPostIt: _addPostIt,
+                    onDelete: _deleteSelected,
+                    onBringToFront: _bringToFront,
+                    onSendToBack: _sendToBack,
+                    onEdit:
+                        _selectedItem.length == 1
+                            ? (_selectedItem.first.isImage ? () => _pickGalleryImageForItem(_selectedItem.first) : _editPostIt)
+                            : null,
+                  ),
+                ),
               ),
             ),
           ),

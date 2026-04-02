@@ -25,8 +25,14 @@ class _PostItEditViewState extends State<PostItEditView> {
   Color currentColor = Colors.black;
   Color canvasColor = Colors.white;
 
-  Offset clampOffset(Offset offset) {
-    return Offset(offset.dx.clamp(0.0, 500.0), offset.dy.clamp(0.0, 500.0));
+  double _getCanvasSize(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final padding = 32.0; // 16px padding on each side
+    return screenWidth - padding;
+  }
+
+  Offset clampOffset(Offset offset, double canvasSize) {
+    return Offset(offset.dx.clamp(0.0, canvasSize), offset.dy.clamp(0.0, canvasSize));
   }
 
   void clearCanvas() {
@@ -109,7 +115,6 @@ class _PostItEditViewState extends State<PostItEditView> {
               _saveAndReturn();
             },
             icon: const Icon(Icons.save),
-            tooltip: 'Save as Post-it',
           ),
           IconButton(
             onPressed: () {
@@ -118,21 +123,18 @@ class _PostItEditViewState extends State<PostItEditView> {
               });
             },
             icon: const Icon(Icons.clear),
-            tooltip: 'Clear',
           ),
           IconButton(
             onPressed: () {
               undo();
             },
             icon: const Icon(Icons.undo),
-            tooltip: 'Undo',
           ),
           IconButton(
             onPressed: () {
               redo();
             },
             icon: const Icon(Icons.redo),
-            tooltip: 'Redo',
           ),
         ],
       ),
@@ -142,85 +144,41 @@ class _PostItEditViewState extends State<PostItEditView> {
           children: [
             GestureDetector(
               onPanStart: (details) {
+                final canvasSize = _getCanvasSize(context);
                 setState(() {
-                  currentStroke = [clampOffset(details.localPosition)];
+                  currentStroke = [clampOffset(details.localPosition, canvasSize)];
                 });
               },
               onPanUpdate: (details) {
+                final canvasSize = _getCanvasSize(context);
                 setState(() {
-                  final clampedPosition = clampOffset(details.localPosition);
+                  final clampedPosition = clampOffset(details.localPosition, canvasSize);
                   if (currentTool == DrawingTool.pen ||
                       currentTool == DrawingTool.eraser) {
                     currentStroke.add(clampedPosition);
-                  } else if (currentTool == DrawingTool.circle ||
-                      currentTool == DrawingTool.square) {
-                    currentStroke = [currentStroke.first, clampedPosition];
                   }
                 });
               },
               onPanEnd: (details) {
                 if (currentStroke.isNotEmpty) {
                   setState(() {
-                    if (currentTool == DrawingTool.pen ||
-                        currentTool == DrawingTool.eraser) {
-                      actions = actions.sublist(0, currentIndex + 1);
-                      actions.add(
-                        StrokeAction(
-                          List.from(currentStroke),
-                          currentTool == DrawingTool.eraser
-                              ? canvasColor
-                              : currentColor,
-                          strokeSize.toDouble(),
-                        ),
-                      );
-                      currentIndex++;
-                    } else if (currentTool == DrawingTool.circle) {
-                      final center = currentStroke.first;
-                      final radius = (currentStroke.last - center).distance;
-                      actions = actions.sublist(0, currentIndex + 1);
-                      actions.add(
-                        CircleAction(
-                          center,
-                          radius,
-                          currentColor,
-                          strokeSize.toDouble(),
-                        ),
-                      );
-                      currentIndex++;
-                    } else if (currentTool == DrawingTool.square) {
-                      final topLeft = Offset(
-                        currentStroke.first.dx < currentStroke.last.dx
-                            ? currentStroke.first.dx
-                            : currentStroke.last.dx,
-                        currentStroke.first.dy < currentStroke.last.dy
-                            ? currentStroke.first.dy
-                            : currentStroke.last.dy,
-                      );
-                      final width =
-                          (currentStroke.last.dx - currentStroke.first.dx)
-                              .abs();
-                      final height =
-                          (currentStroke.last.dy - currentStroke.first.dy)
-                              .abs();
-
-                      actions = actions.sublist(0, currentIndex + 1);
-                      actions.add(
-                        SquareAction(
-                          topLeft,
-                          width,
-                          height,
-                          currentColor,
-                          strokeSize.toDouble(),
-                        ),
-                      );
-                      currentIndex++;
-                    }
+                    actions = actions.sublist(0, currentIndex + 1);
+                    actions.add(
+                      StrokeAction(
+                        List.from(currentStroke),
+                        currentTool == DrawingTool.eraser
+                            ? canvasColor
+                            : currentColor,
+                        strokeSize.toDouble(),
+                      ),
+                    );
+                    currentIndex++;
                   });
                 }
               },
               child: Container(
-                width: 500,
-                height: 500,
+                width: _getCanvasSize(context),
+                height: _getCanvasSize(context),
                 decoration: BoxDecoration(
                   border: Border.all(color: Colors.grey),
                 ),
@@ -236,7 +194,7 @@ class _PostItEditViewState extends State<PostItEditView> {
                         currentColor: currentColor,
                         canvasColor: canvasColor,
                       ),
-                      size: const Size(500, 500),
+                      size: Size(_getCanvasSize(context), _getCanvasSize(context)),
                     ),
                   ),
                 ),
@@ -310,23 +268,33 @@ class _PostItEditViewState extends State<PostItEditView> {
 
   Widget _buildToolMenu() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.lightGreen,
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: const [
-          BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 2)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(40),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
-      child: Row(
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          IconButton(
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder:
-                    (context) => AlertDialog(
+          // Color & Size Row
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildToolButton(
+                icon: Icons.color_lens,
+                label: 'Color',
+                isSelected: false,
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
                       title: const Text('Select Color'),
                       content: ColorPicker(
                         currentColor: currentColor,
@@ -338,55 +306,107 @@ class _PostItEditViewState extends State<PostItEditView> {
                         },
                       ),
                     ),
-              );
-            },
-            icon: Icon(Icons.color_lens, color: currentColor),
-            tooltip: 'Color Picker',
+                  );
+                },
+                backgroundColor: currentColor,
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          if (strokeSize > 1) strokeSize--;
+                        });
+                      },
+                      child: const Icon(Icons.remove, size: 18, color: Colors.grey),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      '$strokeSize',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          if (strokeSize < 20) strokeSize++;
+                        });
+                      },
+                      child: const Icon(Icons.add, size: 18, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          IconButton(
-            onPressed: () {
-              setState(() {
-                currentTool = DrawingTool.pen;
-              });
-            },
-            icon: const Icon(Icons.brush),
-            tooltip: 'Pen',
-            color: currentTool == DrawingTool.pen ? Colors.blue : Colors.grey,
-          ),
-          IconButton(
-            onPressed: () {
-              setState(() {
-                currentTool = DrawingTool.circle;
-              });
-            },
-            icon: const Icon(Icons.circle_outlined),
-            tooltip: 'Circle',
-            color:
-                currentTool == DrawingTool.circle ? Colors.blue : Colors.grey,
-          ),
-          IconButton(
-            onPressed: () {
-              setState(() {
-                currentTool = DrawingTool.square;
-              });
-            },
-            icon: const Icon(Icons.crop_square),
-            tooltip: 'Square',
-            color:
-                currentTool == DrawingTool.square ? Colors.blue : Colors.grey,
-          ),
-          IconButton(
-            onPressed: () {
-              setState(() {
-                currentTool = DrawingTool.eraser;
-              });
-            },
-            icon: const Icon(Icons.cleaning_services),
-            tooltip: 'Eraser',
-            color:
-                currentTool == DrawingTool.eraser ? Colors.blue : Colors.grey,
+          const SizedBox(height: 12),
+          // Drawing Tools Row
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildToolButton(
+                icon: Icons.brush,
+                label: 'Pen',
+                isSelected: currentTool == DrawingTool.pen,
+                onPressed: () {
+                  setState(() {
+                    currentTool = DrawingTool.pen;
+                  });
+                },
+              ),
+              const SizedBox(width: 8),
+              _buildToolButton(
+                icon: Icons.cleaning_services,
+                label: 'Eraser',
+                isSelected: currentTool == DrawingTool.eraser,
+                onPressed: () {
+                  setState(() {
+                    currentTool = DrawingTool.eraser;
+                  });
+                },
+              ),
+            ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildToolButton({
+    required IconData icon,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onPressed,
+    Color? backgroundColor,
+  }) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.blue.shade100 : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? Colors.blue : Colors.transparent,
+            width: 2,
+          ),
+        ),
+        child: Icon(
+          icon,
+          color: backgroundColor ?? (isSelected ? Colors.blue : Colors.grey.shade700),
+          size: 24,
+        ),
       ),
     );
   }

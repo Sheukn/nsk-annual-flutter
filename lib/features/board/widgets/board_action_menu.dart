@@ -6,7 +6,6 @@ class BoardActionMenu extends StatelessWidget {
   final VoidCallback onAddImage;
   final VoidCallback onAddPostIt;
   final VoidCallback onDelete;
-  final VoidCallback onChangeColor;
   final VoidCallback onBringToFront;
   final VoidCallback onSendToBack;
   final VoidCallback? onEdit;
@@ -17,7 +16,6 @@ class BoardActionMenu extends StatelessWidget {
     required this.onAddImage,
     required this.onAddPostIt,
     required this.onDelete,
-    required this.onChangeColor,
     required this.onBringToFront,
     required this.onSendToBack,
     this.onEdit,
@@ -32,15 +30,37 @@ class BoardActionMenu extends StatelessWidget {
       curve: Curves.easeInOut,
       width:
           selectedItems.length == 1 && onEdit != null
-              ? 280
+              ? 320
               : selectedItems.isNotEmpty
-              ? 200
-              : 120,
-      height: 56,
+              ? 240
+              : 140,
+      height: 64,
       decoration: BoxDecoration(
-        color: Colors.blue,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: const [BoxShadow(blurRadius: 8, color: Colors.black26)],
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.blue.shade600,
+            Colors.blue.shade400,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(
+            blurRadius: 16,
+            color: Colors.blue.withAlpha(100),
+            offset: const Offset(0, 6),
+          ),
+          BoxShadow(
+            blurRadius: 8,
+            color: Colors.black.withAlpha(50),
+            offset: const Offset(0, 3),
+          ),
+        ],
+        border: Border.all(
+          color: Colors.white10,
+          width: 1,
+        ),
       ),
       child: AnimatedSize(
         duration: const Duration(milliseconds: 300),
@@ -61,15 +81,27 @@ class BoardActionMenu extends StatelessWidget {
   Widget _buildAddButtons() {
     return Row(
       key: const ValueKey('add'),
-      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        IconButton(
-          icon: const Icon(Icons.add_photo_alternate, color: Colors.white),
-          onPressed: onAddImage,
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white10,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: IconButton(
+            icon: const Icon(Icons.add_photo_alternate, color: Colors.white),
+            onPressed: onAddImage,
+          ),
         ),
-        IconButton(
-          icon: const Icon(Icons.sticky_note_2, color: Colors.white),
-          onPressed: onAddPostIt,
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white10,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: IconButton(
+            icon: const Icon(Icons.sticky_note_2, color: Colors.white),
+            onPressed: onAddPostIt,
+          ),
         ),
       ],
     );
@@ -78,28 +110,51 @@ class BoardActionMenu extends StatelessWidget {
   Widget _buildEditActions() {
     return Row(
       key: const ValueKey('edit'),
-      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        IconButton(
-          icon: const Icon(Icons.delete, color: Colors.white),
-          onPressed: onDelete,
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.redAccent.withAlpha(150),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: IconButton(
+            icon: const Icon(Icons.delete, color: Colors.white),
+            onPressed: onDelete,
+          ),
         ),
-        IconButton(
-          icon: const Icon(Icons.color_lens, color: Colors.white),
-          onPressed: onChangeColor,
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white10,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: IconButton(
+            icon: const Icon(Icons.arrow_upward, color: Colors.white),
+            onPressed: onBringToFront,
+          ),
         ),
-        IconButton(
-          icon: const Icon(Icons.arrow_upward, color: Colors.white),
-          onPressed: onBringToFront,
-        ),
-        IconButton(
-          icon: const Icon(Icons.arrow_downward, color: Colors.white),
-          onPressed: onSendToBack,
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white10,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: IconButton(
+            icon: const Icon(Icons.arrow_downward, color: Colors.white),
+            onPressed: onSendToBack,
+          ),
         ),
         if (selectedItems.length == 1 && onEdit != null)
-          IconButton(
-            icon: Icon(selectedItems.first.isImage ? Icons.add_photo_alternate : Icons.edit, color: Colors.white),
-            onPressed: onEdit,
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.amber.withAlpha(150),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: IconButton(
+              icon: Icon(
+                selectedItems.first.isImage ? Icons.add_photo_alternate : Icons.edit,
+                color: Colors.white,
+              ),
+              onPressed: onEdit,
+            ),
           ),
       ],
     );

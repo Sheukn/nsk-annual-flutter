@@ -34,7 +34,40 @@ class _BoardListViewState extends State<BoardListView> {
   }
 
   Future<void> _createBoard() async {
-    final boardName = 'Board ${DateTime.now().millisecondsSinceEpoch}';
+    final nameController = TextEditingController();
+    
+    final boardName = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Create New Board'),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(
+            hintText: 'Enter board name',
+            border: OutlineInputBorder(),
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final name = nameController.text.trim();
+              if (name.isNotEmpty) {
+                Navigator.pop(context, name);
+              }
+            },
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+
+    if (boardName == null || boardName.isEmpty) return;
+
     final boardId = await _databaseService.createBoard(
       name: boardName,
       height: _boardHeight,
@@ -87,6 +120,88 @@ class _BoardListViewState extends State<BoardListView> {
             child: const Text('Delete'),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _renameBoard(SavedBoard board) async {
+    final nameController = TextEditingController(text: board.name);
+    
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Rename Board'),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final name = nameController.text.trim();
+              if (name.isNotEmpty) {
+                Navigator.pop(context, name);
+              }
+            },
+            child: const Text('Rename'),
+          ),
+        ],
+      ),
+    );
+
+    if (newName == null || newName.isEmpty) return;
+
+    await _databaseService.updateBoardName(board.id, newName);
+    await _refreshBoards();
+  }
+
+  void _showBoardOptions(SavedBoard board) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => Container(
+        color: Colors.grey.shade900,
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  board.name,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.edit, color: Colors.blue),
+                title: const Text('Rename', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _renameBoard(board);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete, color: Colors.red),
+                title: const Text('Delete', style: TextStyle(color: Colors.red)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _deleteBoard(board);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -209,7 +324,7 @@ class _BoardListViewState extends State<BoardListView> {
                         color: Colors.transparent,
                         child: GestureDetector(
                           onTap: () => _openBoard(board),
-                          onLongPress: () => _deleteBoard(board),
+                          onLongPress: () => _showBoardOptions(board),
                           child: Container(
                             decoration: BoxDecoration(
                               color: Colors.blueGrey.shade700,

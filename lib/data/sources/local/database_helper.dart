@@ -300,4 +300,19 @@ class DatabaseService {
       whereArgs: [boardId],
     );
   }
+
+  Future<void> updateBoardName(int boardId, String newName) async {
+    final db = await database;
+    final now = DateTime.now().toIso8601String();
+    
+    await db.update(
+      'Board',
+      {
+        'name': newName,
+        'last_update': now,
+      },
+      where: 'id = ?',
+      whereArgs: [boardId],
+    );
+  }
 } 

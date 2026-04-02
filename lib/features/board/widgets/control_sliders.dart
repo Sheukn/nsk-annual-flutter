@@ -16,33 +16,48 @@ class RotationSlider extends StatelessWidget {
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.only(left: 10),
-        padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 1),
+        margin: const EdgeInsets.only(left: 8),
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
         decoration: BoxDecoration(
-          color: Colors.grey.withOpacity(0.8),
-          borderRadius: BorderRadius.circular(30),
-          border: Border.all(color: Colors.white24),
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              const Color.fromARGB(255, 156, 164, 172),
+              Colors.blue.shade400,
+            ],
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white12, width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.blue.withAlpha(80),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.rotate_right, color: Colors.white, size: 20),
-            const SizedBox(height: 6),
+            const Icon(Icons.rotate_right, color: Colors.white, size: 16),
+            const SizedBox(height: 4),
             SizedBox(
               height: 200,
-              width: 40,
+              width: 12,
               child: RotatedBox(
                 quarterTurns: 3,
                 child: Slider(
                   value: rotation,
                   min: -pi,
                   max: pi,
-                  activeColor: Colors.blueAccent,
+                  activeColor: Colors.white,
                   inactiveColor: Colors.white24,
                   onChanged: onChanged,
                 ),
               ),
             ),
+            const SizedBox(height: 2),
           ],
         ),
       ),
@@ -61,32 +76,48 @@ class SizeSlider extends StatelessWidget {
     return Align(
       alignment: Alignment.centerRight,
       child: Container(
-        margin: const EdgeInsets.only(right: 10),
-        padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 1),
+       margin: const EdgeInsets.only(right: 8),
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
         decoration: BoxDecoration(
-          color: Colors.grey.withOpacity(0.8),
-          borderRadius: BorderRadius.circular(30),
-          border: Border.all(color: Colors.white24),
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              const Color.fromARGB(255, 156, 164, 172),
+              Colors.blue.shade400,
+            ],
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white12, width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.blue.withAlpha(80),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.aspect_ratio, color: Colors.white, size: 20),
+            const Icon(Icons.aspect_ratio, color: Colors.white, size: 16),
+            const SizedBox(height: 4),
             SizedBox(
               height: 200,
-              width: 40,
+              width: 12,
               child: RotatedBox(
                 quarterTurns: 3,
                 child: Slider(
                   value: width,
                   min: 50,
                   max: 500,
-                  activeColor: Colors.blueAccent,
+                  activeColor: Colors.white,
                   inactiveColor: Colors.white24,
                   onChanged: onChanged,
                 ),
               ),
             ),
+            const SizedBox(height: 2),
           ],
         ),
       ),
